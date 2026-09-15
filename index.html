@@ -1620,8 +1620,8 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 }
 #toolbar button {
   flex: 0 0 auto;
-  width: 2.35rem;
-  height: 2.25rem;
+  width: 2.115rem;
+  height: 2.025rem;
   padding: 0;
   border: 1px solid var(--ui-line);
   border-radius: 0;
@@ -1629,7 +1629,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
   color: #222;
   display: inline-grid;
   place-items: center;
-  font-size: .98rem;
+  font-size: .882rem;
 }
 #toolbar select {
   flex: 0 0 auto;
@@ -4171,6 +4171,7 @@ function moveSlideBefore(dragId, targetId = null) {
   if (from < to) to -= 1;
   state.deck.slides.splice(to, 0, moved);
   state.currentSlideId = moved.id;
+  if (state.editMode) loadEditorsFromCurrent();
   autosave();
   scheduleRender('reorder');
 }
@@ -5929,7 +5930,11 @@ function setupEvents() {
       .forEach(node => node.classList.remove('drop-before'));
 
     const thumb = event.target.closest('.thumb');
-    if (!thumb || thumb.dataset.slideId === state.dragSlideId) return;
+    if (!thumb) return;
+    if (thumb.dataset.slideId === state.dragSlideId) {
+      thumb.classList.add('drop-before');
+      return;
+    }
 
     const rect = thumb.getBoundingClientRect();
     const after = event.clientY > rect.top + rect.height / 2;
@@ -5937,10 +5942,7 @@ function setupEvents() {
     if (after) {
       const next = thumb.nextElementSibling;
 
-      if (
-        next?.classList.contains('thumb') &&
-        next.dataset.slideId !== state.dragSlideId
-      ) {
+      if (next?.classList.contains('thumb')) {
         next.classList.add('drop-before');
       }
     } else {

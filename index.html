@@ -1952,6 +1952,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
       <button id="restore-deck" type="button" title="Restore previous deck" aria-label="Restore previous deck" disabled><i class="fa-solid fa-clock-rotate-left"></i></button>
       <button id="manage-assets" type="button" title="Manage pasted images" aria-label="Manage images"><i class="fa-solid fa-images"></i></button>
       <button id="view-json" type="button" title="View canonical JSON" aria-label="View JSON"><i class="fa-solid fa-code"></i></button>
+      <button id="export-markdown" type="button" title="Export editable Markdown" aria-label="Export Markdown"><i class="fa-solid fa-file-lines"></i></button>
       <button id="save-deck" type="button" title="Save deck" aria-label="Save deck"><i class="fa-solid fa-floppy-disk"></i></button>
       <button id="publish-deck" type="button" title="Publish deck" aria-label="Publish deck"><i class="fa-solid fa-cloud-arrow-up"></i></button>
       <button id="speaker-button" type="button" title="Speaker view (S)" aria-label="Speaker view"><i class="fa-solid fa-person-chalkboard"></i></button>
@@ -4411,7 +4412,9 @@ window.ModernSlidesAPI = {
   previous: previousStepOrSlide,
   resetTimer: resetSpeakerTimer,
   schema: DECK_SCHEMA,
-  selfTest: runRoundTripSelfTest
+  toMarkdown: () => deckToMarkdown(state.deck),
+  selfTest: runRoundTripSelfTest,
+  markdownSelfTest: runMarkdownRoundTripSelfTest
 };
 
 /* ---------- Legacy Format 1 translator ---------- */
@@ -4592,7 +4595,10 @@ function importLegacyDeck(text, filename = 'Imported Presentation') {
 /* ---------- Markdown importer ---------- */
 function markdownScalar(value) {
   const source = String(value ?? '').trim();
-  if ((source.startsWith('"') && source.endsWith('"')) || (source.startsWith("'") && source.endsWith("'"))) return source.slice(1, -1);
+  if (source.startsWith('"') && source.endsWith('"')) {
+    try { return JSON.parse(source); } catch { return source.slice(1, -1); }
+  }
+  if (source.startsWith("'") && source.endsWith("'")) return source.slice(1, -1).replace(/''/g, "'");
   if (/^(true|false)$/i.test(source)) return source.toLowerCase() === 'true';
   return source;
 }
@@ -4801,6 +4807,141 @@ function importMarkdownDeck(text, filename = 'presentation.md') {
   return normalizeDeck(deck);
 }
 
+/* ---------- Markdown exporter ---------- */
+function markdownFrontMatterValue(value) {
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return JSON.stringify(String(value ?? ''));
+}
+function markdownCodeFence(content) {
+  const source = String(content ?? '');
+  const longest = Math.max(0, ...Array.from(source.matchAll(/`+/g), match => match[0].length));
+  return '`'.repeat(Math.max(3, longest + 1));
+}
+function markdownTableRow(cells) {
+  const values = (cells || []).map(cell => {
+    if (cell && typeof cell === 'object' && Array.isArray(cell.blocks)) return blocksToMarkdown(cell.blocks).replace(/\n+/g, ' ');
+    return String(cell ?? '').replace(/\|/g, '\\|').replace(/\n+/g, '<br>');
+  });
+  return `| ${values.join(' | ')} |`;
+}
+function markdownListItem(item, block, index) {
+  const marker = block.ordered ? `${Math.max(1, Math.trunc(Number(item?.number) || (block.start || 1) + index))}.` : '-';
+  const lines = String(item?.content ?? '').split('\n');
+  return [`${marker} ${lines.shift() || ''}`, ...lines.map(line => `  ${line}`)].join('\n');
+}
+function blockToMarkdown(block) {
+  switch (block.type) {
+    case 'title': return `# ${block.content || ''}`;
+    case 'text':
+      if (block.size === 'big') return `## ${String(block.content || '').replace(/\n+/g, ' ')}`;
+      return String(block.content || '');
+    case 'list': return (block.items || []).map((item, index) => markdownListItem(item, block, index)).join('\n');
+    case 'quote': {
+      const lines = String(block.content || '').split('\n').map(line => `> ${line}`);
+      if (block.source) lines.push(`> — ${block.source}`);
+      return lines.join('\n');
+    }
+    case 'image': return `![${String(block.caption || '').replace(/\]/g, '\\]')}](${block.src || ''})`;
+    case 'break': return '<br>';
+    case 'rule': return '***';
+    case 'website': return `[Open website](${block.src || ''})`;
+    case 'code': {
+      const fence = markdownCodeFence(block.content);
+      return `${fence}${block.lang || ''}\n${block.content || ''}\n${fence}`;
+    }
+    case 'columns':
+      return (block.columns || []).map((column, index) => `### Column ${index + 1}\n\n${blocksToMarkdown(column.blocks)}`).join('\n\n');
+    case 'table': {
+      if (!block.rows?.length) return '';
+      const columnCount = Math.max(1, ...block.rows.map(row => row.length));
+      const header = block.rows[0] || [];
+      const align = Array.from({length:columnCount}, (_, index) => ({c:':---:', r:'---:'}[block.columnAlign?.[index]] || '---'));
+      return [markdownTableRow(header), markdownTableRow(align), ...block.rows.slice(1).map(markdownTableRow)].join('\n');
+    }
+    default: return '';
+  }
+}
+function blocksToMarkdown(blocks) {
+  return (blocks || []).map(blockToMarkdown).filter(Boolean).join('\n\n').trim();
+}
+function slideToMarkdown(slide) {
+  const sections = [];
+  if (slide.layout && slide.layout !== 'auto') sections.push(`<!-- layout: ${slide.layout} -->`);
+  if (slide.hidden) sections.push('<!-- hidden: true -->');
+  if (slide.background?.src) sections.push(`<!-- background${slide.background.mode === 'full' ? '-full' : ''}: ${slide.background.src} -->`);
+  if (slide.header) sections.push(`<!-- header: ${slide.header.replace(/-->/g, '--&gt;')} -->`);
+  if (slide.aside) sections.push(`<!-- aside: ${slide.aside.replace(/-->/g, '--&gt;')} -->`);
+  const body = blocksToMarkdown(slide.blocks);
+  if (body) sections.push(body);
+  if (slide.speaker) sections.push(`:::notes\n${slide.speaker}\n:::`);
+  if (slide.print) sections.push(`:::print-notes\n${slide.print}\n:::`);
+  return sections.join('\n\n').trim();
+}
+function deckToMarkdown(deck = state.deck) {
+  const meta = deck?.meta || defaultMeta();
+  const frontMatter = [
+    '---',
+    `title: ${markdownFrontMatterValue(meta.title)}`,
+    `theme: ${markdownFrontMatterValue(meta.theme)}`,
+    `author: ${markdownFrontMatterValue(meta.author)}`,
+    `date: ${markdownFrontMatterValue(meta.date)}`,
+    `footer: ${markdownFrontMatterValue(meta.footer)}`,
+    `page-numbers: ${markdownFrontMatterValue(meta.pageNumbers !== false)}`,
+    ...(meta.logo ? [`logo: ${markdownFrontMatterValue(meta.logo)}`] : []),
+    '---'
+  ];
+  const slides = (deck?.slides || []).map(slideToMarkdown).filter(Boolean);
+  return `${frontMatter.join('\n')}\n\n${slides.join('\n\n---\n\n')}\n`;
+}
+function runMarkdownRoundTripSelfTest() {
+  try {
+    const source = normalizeDeck({
+      format:FORMAT,
+      version:VERSION,
+      meta:{...defaultMeta('Markdown "Round Trip"'), theme:'bauhaus', author:'Test Author', footer:'Test Footer', pageNumbers:false},
+      assets:{},
+      slides:[
+        {
+          id:'intro', hidden:false, layout:'statement', background:{src:'background.jpg', mode:'full'}, header:'Section', aside:'Aside',
+          speaker:'Speaker note', print:'Print note', steps:0,
+          blocks:[
+            {type:'title', content:'Opening'},
+            {type:'text', size:'normal', content:'A **Markdown** paragraph.'},
+            {type:'list', ordered:false, start:1, progressive:false, size:'normal', items:[{content:'First'},{content:'Second'}]},
+            {type:'quote', content:'A useful quotation.', source:'Source'}
+          ]
+        },
+        {
+          id:'data', hidden:false, layout:'data', background:null, header:'', aside:'', speaker:'', print:'', steps:0,
+          blocks:[
+            {type:'title', content:'Data'},
+            {type:'table', widths:[], headerRows:1, headerCols:0, columnAlign:['l','r'], rows:[['Metric','Value'],['Result','42']]},
+            {type:'code', lang:'javascript', content:"const divider = '---';"}
+          ]
+        }
+      ]
+    });
+    const markdown = deckToMarkdown(source);
+    const imported = importMarkdownDeck(markdown, 'round-trip.md');
+    const checks = [
+      imported.meta.title === source.meta.title,
+      imported.meta.theme === source.meta.theme,
+      imported.meta.pageNumbers === false,
+      imported.slides.length === 2,
+      imported.slides[0].layout === 'statement',
+      imported.slides[0].background?.mode === 'full',
+      imported.slides[0].speaker === 'Speaker note',
+      imported.slides[0].print === 'Print note',
+      imported.slides[0].blocks.some(block => block.type === 'quote' && block.source === 'Source'),
+      imported.slides[1].blocks.some(block => block.type === 'table' && block.rows?.[1]?.[1] === '42'),
+      imported.slides[1].blocks.some(block => block.type === 'code' && block.content.includes("'---'"))
+    ];
+    return {ok:checks.every(Boolean), markdown, imported};
+  } catch (error) {
+    return {ok:false, error:error?.message || String(error)};
+  }
+}
+
 /* ---------- Deck loading ---------- */
 function deckFromText(text, filename = 'presentation') {
   const source = String(text || '').trim();
@@ -4854,20 +4995,23 @@ async function loadFromQuery(deckValue) {
       const text = await response.text();
       const leaf = absolute.pathname.split('/').pop() || 'presentation.txt';
       const deck = deckFromText(text, leaf);
-      await applyDeck(deck, {filename:leaf.replace(/\.(txt|json)$/i, '') + '.json', baseUrl:new URL('.', absolute.href).href, preservePrevious:true, fileHandle:null});
+      await applyDeck(deck, {filename:leaf.replace(/\.(txt|json|md|markdown)$/i, '') + '.json', baseUrl:new URL('.', absolute.href).href, preservePrevious:true, fileHandle:null});
       return true;
     } catch (error) { lastError = error; }
   }
   throw lastError || new Error('Could not load the requested deck.');
 }
-function fallbackDownloadDeck(text) {
-  const blob = new Blob([text], {type:'application/json'});
+function fallbackDownloadText(text, filename, type = 'text/plain') {
+  const blob = new Blob([text], {type});
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  const title = slugify(state.deck.meta.title, 'presentation');
-  link.download = state.filename?.endsWith('.json') ? state.filename : `${title}.json`;
+  link.download = filename;
   document.body.appendChild(link); link.click();
   window.setTimeout(() => { URL.revokeObjectURL(link.href); link.remove(); }, 0);
+}
+function fallbackDownloadDeck(text) {
+  const title = slugify(state.deck.meta.title, 'presentation');
+  fallbackDownloadText(text, state.filename?.endsWith('.json') ? state.filename : `${title}.json`, 'application/json');
 }
 async function canWriteHandle(handle) {
   if (!handle) return false;
@@ -4902,6 +5046,30 @@ async function saveDeck() {
   }
   fallbackDownloadDeck(text);
   setStatus('Downloaded deck', 'saved');
+}
+async function exportMarkdown() {
+  if (state.editMode) commitEditor({record:true});
+  const text = deckToMarkdown(state.deck);
+  const filename = `${slugify(state.deck.meta.title, 'presentation')}.md`;
+  try {
+    if ('showSaveFilePicker' in window) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName:filename,
+        types:[{description:'Markdown presentation', accept:{'text/markdown':['.md']}}]
+      });
+      if (handle && await canWriteHandle(handle)) {
+        const writable = await handle.createWritable();
+        await writable.write(text); await writable.close();
+        setStatus(`Exported ${handle.name || filename}`, 'saved');
+        return;
+      }
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    console.warn('Markdown save picker failed; falling back to download.', error);
+  }
+  fallbackDownloadText(text, filename, 'text/markdown');
+  setStatus(`Downloaded ${filename}`, 'saved');
 }
 function normalizePublishName(value) {
   let name = String(value ?? '').trim();
@@ -5986,6 +6154,7 @@ function setupEvents() {
     $('json-view').value = JSON.stringify(state.deck, null, 2);
     openModal('json-modal');
   });
+  $('export-markdown').addEventListener('click', exportMarkdown);
   $('save-deck').addEventListener('click', saveDeck);
   $('publish-deck').addEventListener('click', openPublishDialog);
   $('confirm-publish').addEventListener('click', publishDeck);
@@ -6255,6 +6424,8 @@ async function initialize() {
   setNotesTab('speaker');
   const selfTest = runRoundTripSelfTest();
   if (!selfTest.ok) console.error('ModernSlides round-trip self-test failed', selfTest);
+  const markdownSelfTest = runMarkdownRoundTripSelfTest();
+  if (!markdownSelfTest.ok) console.error('ModernSlides Markdown round-trip self-test failed', markdownSelfTest);
   const params = new URLSearchParams(location.search);
   const query = params.get('deck') || params.get('xml');
   try {

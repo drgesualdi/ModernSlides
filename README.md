@@ -56,6 +56,8 @@ Slide-level settings can be added as HTML comments and remain invisible in the r
 
 Valid layouts are `auto`, `top`, `center`, `statement`, `data`, and `full`. Relative image paths are resolved from the location of the Markdown file when it is loaded from a URL.
 
+After editing, use the **Export Markdown** button (the document icon beside View JSON) to download the complete deck as an editable `.md` file. That file can be revised in any text editor and opened in ModernSlides again. Standard Markdown content, deck metadata, slide divisions, layouts, backgrounds, hidden slides, and speaker/print notes round-trip through the export. Advanced ModernSlides-only formatting is converted to readable Markdown where possible: columns are flattened into labeled sections, embedded websites become links, and exact text/image sizing or reveal timing may need to be restored in the slide editor after re-importing.
+
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  
 # Slide format overview

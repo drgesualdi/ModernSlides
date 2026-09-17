@@ -1948,7 +1948,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
       <span class="toolbar-spacer"></span>
       <button id="help-button" type="button" title="Help" aria-label="Help"><i class="fa-solid fa-question"></i></button>
       <button id="new-deck" type="button" title="New deck" aria-label="New deck"><i class="fa-solid fa-file-circle-plus"></i></button>
-      <button id="load-deck" type="button" title="Load JSON or old text deck" aria-label="Load deck"><i class="fa-solid fa-folder-open"></i></button>
+      <button id="load-deck" type="button" title="Load JSON, Markdown, or old text deck" aria-label="Load deck"><i class="fa-solid fa-folder-open"></i></button>
       <button id="restore-deck" type="button" title="Restore previous deck" aria-label="Restore previous deck" disabled><i class="fa-solid fa-clock-rotate-left"></i></button>
       <button id="manage-assets" type="button" title="Manage pasted images" aria-label="Manage images"><i class="fa-solid fa-images"></i></button>
       <button id="view-json" type="button" title="View canonical JSON" aria-label="View JSON"><i class="fa-solid fa-code"></i></button>
@@ -2154,7 +2154,7 @@ Code(python): labels the code block as Python.</pre>
   </div>
 </div>
 
-<input id="file-input" type="file" class="hidden" accept=".json,.txt,application/json,text/plain">
+<input id="file-input" type="file" class="hidden" accept=".json,.txt,.md,.markdown,application/json,text/plain,text/markdown">
 <div id="render-bank" aria-hidden="true"></div>
 <div id="print-root"></div>
 
@@ -4589,6 +4589,218 @@ function importLegacyDeck(text, filename = 'Imported Presentation') {
   return normalizeDeck(deck);
 }
 
+/* ---------- Markdown importer ---------- */
+function markdownScalar(value) {
+  const source = String(value ?? '').trim();
+  if ((source.startsWith('"') && source.endsWith('"')) || (source.startsWith("'") && source.endsWith("'"))) return source.slice(1, -1);
+  if (/^(true|false)$/i.test(source)) return source.toLowerCase() === 'true';
+  return source;
+}
+function extractMarkdownFrontMatter(text) {
+  const source = cleanText(text).replace(/^\uFEFF/, '');
+  const lines = source.split('\n');
+  if (lines[0]?.trim() !== '---') return {attributes:{}, body:source};
+  const closing = lines.slice(1).findIndex(line => line.trim() === '---');
+  if (closing < 0) return {attributes:{}, body:source};
+  const end = closing + 1;
+  const attributes = {};
+  lines.slice(1, end).forEach(line => {
+    const match = line.match(/^\s*([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*?)\s*$/);
+    if (match) attributes[match[1].toLowerCase().replace(/[_-]/g, '')] = markdownScalar(match[2]);
+  });
+  if (!Object.keys(attributes).length) return {attributes:{}, body:source};
+  return {attributes, body:lines.slice(end + 1).join('\n')};
+}
+function splitMarkdownSlides(text) {
+  const slides = [];
+  let lines = [];
+  let fence = null;
+  cleanText(text).split('\n').forEach(line => {
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      if (!fence) fence = marker;
+      else if (fence === marker) fence = null;
+    }
+    if (!fence && /^\s*---\s*$/.test(line)) {
+      if (lines.some(value => value.trim())) slides.push(lines.join('\n'));
+      lines = [];
+    } else lines.push(line);
+  });
+  if (lines.some(value => value.trim())) slides.push(lines.join('\n'));
+  return slides;
+}
+function markdownTableCells(line) {
+  let source = String(line ?? '').trim();
+  if (source.startsWith('|')) source = source.slice(1);
+  if (source.endsWith('|') && !source.endsWith('\\|')) source = source.slice(0, -1);
+  return splitOutsideMath(source, '|').map(cell => cell.trim());
+}
+function isMarkdownTableDivider(line) {
+  const cells = markdownTableCells(line);
+  return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+}
+function markdownTableAlign(line) {
+  return markdownTableCells(line).map(cell => cell.startsWith(':') && cell.endsWith(':') ? 'c' : cell.endsWith(':') ? 'r' : 'l');
+}
+function markdownImage(line) {
+  const match = String(line ?? '').trim().match(/^!\[([^\]]*)\]\(\s*(\S+?)(?:\s+["'][^"']*["'])?\s*\)$/);
+  return match ? {caption:match[1], src:match[2]} : null;
+}
+function isMarkdownBoundary(lines, index) {
+  const line = lines[index] || '';
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (/^#{1,6}\s+/.test(trimmed) || /^(`{3,}|~{3,})/.test(trimmed) || /^:::(?:notes|speaker-notes|print-notes)\s*$/i.test(trimmed)) return true;
+  if (markdownImage(trimmed) || /^>\s?/.test(trimmed) || parseListLine(line)) return true;
+  return index + 1 < lines.length && trimmed.includes('|') && isMarkdownTableDivider(lines[index + 1]);
+}
+function markdownSlideFromText(text, index, deck) {
+  const lines = cleanText(text).split('\n');
+  const blocks = [];
+  let speaker = '';
+  let print = '';
+  let layout = 'auto';
+  let background = null;
+  let header = '';
+  let aside = '';
+  let hidden = false;
+  let i = 0;
+  while (i < lines.length) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+    if (!trimmed) { i++; continue; }
+
+    const setting = trimmed.match(/^<!--\s*(layout|background|background-full|header|aside|hidden)\s*:\s*(.*?)\s*-->$/i);
+    if (setting) {
+      const key = setting[1].toLowerCase();
+      const value = setting[2].trim();
+      if (key === 'layout' && LAYOUTS.has(value.toLowerCase())) layout = value.toLowerCase();
+      if (key === 'background') background = value ? {src:value, mode:'tint'} : null;
+      if (key === 'background-full') background = value ? {src:value, mode:'full'} : null;
+      if (key === 'header') header = value;
+      if (key === 'aside') aside = value;
+      if (key === 'hidden') hidden = value.toLowerCase() === 'true';
+      i++;
+      continue;
+    }
+
+    const notesStart = trimmed.match(/^:::(notes|speaker-notes|print-notes)\s*$/i);
+    if (notesStart) {
+      const noteLines = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== ':::') noteLines.push(lines[i++]);
+      if (i < lines.length) i++;
+      const note = noteLines.join('\n').trim();
+      if (notesStart[1].toLowerCase() === 'print-notes') print = note;
+      else speaker = note;
+      continue;
+    }
+
+    const fence = trimmed.match(/^(`{3,}|~{3,})\s*([^\s`]*)\s*$/);
+    if (fence) {
+      const marker = fence[1][0];
+      const code = [];
+      i++;
+      while (i < lines.length && !new RegExp(`^\\s*${marker}{3,}\\s*$`).test(lines[i])) code.push(lines[i++]);
+      if (i < lines.length) i++;
+      blocks.push({type:'code', lang:fence[2] || '', content:code.join('\n')});
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+    if (heading) {
+      const isFirstHeading = !blocks.some(block => block.type === 'title');
+      blocks.push(isFirstHeading ? {type:'title', content:heading[2]} : {type:'text', size:heading[1].length === 2 ? 'big' : 'normal', content:`**${heading[2]}**`});
+      i++;
+      continue;
+    }
+
+    const image = markdownImage(trimmed);
+    if (image) {
+      blocks.push({type:'image', src:image.src, caption:image.caption, width:'100%', fit:'contain', focus:'center'});
+      i++;
+      continue;
+    }
+
+    if (/^>\s?/.test(trimmed)) {
+      const quoteLines = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) quoteLines.push(lines[i++].replace(/^\s*>\s?/, ''));
+      let source = '';
+      const sourceMatch = quoteLines.at(-1)?.match(/^\s*(?:—|--+)\s*(.+)$/);
+      if (sourceMatch) {
+        quoteLines.pop();
+        source = sourceMatch[1];
+      }
+      blocks.push({type:'quote', content:quoteLines.join('\n').trim(), source});
+      continue;
+    }
+
+    if (i + 1 < lines.length && trimmed.includes('|') && isMarkdownTableDivider(lines[i + 1])) {
+      const rows = [markdownTableCells(raw)];
+      const columnAlign = markdownTableAlign(lines[i + 1]);
+      i += 2;
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) rows.push(markdownTableCells(lines[i++]));
+      blocks.push({type:'table', widths:[], headerRows:1, headerCols:0, columnAlign, rows});
+      continue;
+    }
+
+    const listStart = parseListLine(raw);
+    if (listStart) {
+      const ordered = listStart.ordered;
+      const items = [];
+      const start = ordered ? listStart.number : 1;
+      while (i < lines.length) {
+        const itemLine = parseListLine(lines[i]);
+        if (!itemLine || itemLine.ordered !== ordered) break;
+        const item = {content:itemLine.content};
+        if (ordered) item.number = itemLine.number;
+        const baseIndent = itemLine.indent;
+        i++;
+        const continuation = [];
+        while (i < lines.length && lines[i].trim() && !parseListLine(lines[i]) && indentWidth(lines[i]) > baseIndent) continuation.push(lines[i++].replace(/^\s+/, ''));
+        if (continuation.length) item.content += `\n${continuation.join('\n')}`;
+        items.push(item);
+      }
+      blocks.push({type:'list', ordered, start, progressive:false, size:'normal', items});
+      continue;
+    }
+
+    const paragraph = [];
+    while (i < lines.length && !isMarkdownBoundary(lines, i)) paragraph.push(lines[i++]);
+    if (paragraph.length) blocks.push({type:'text', size:'normal', content:paragraph.join('\n').trim()});
+    else {
+      blocks.push({type:'text', size:'normal', content:trimmed});
+      i++;
+    }
+  }
+
+  if (!blocks.length) blocks.push({type:'text', size:'normal', content:''});
+  const title = blocks.find(block => block.type === 'title')?.content || `Slide ${index + 1}`;
+  return {
+    id:slugify(title, nextSlideId(deck)), hidden, layout, background, header, aside, speaker, print,
+    steps:0, blocks
+  };
+}
+function importMarkdownDeck(text, filename = 'presentation.md') {
+  const {attributes, body} = extractMarkdownFrontMatter(text);
+  const fallbackTitle = filename.replace(/\.(?:md|markdown)$/i, '') || 'Imported Presentation';
+  const meta = defaultMeta(String(attributes.title || fallbackTitle));
+  if (attributes.theme && THEME_IDS.some(([id]) => id === attributes.theme)) meta.theme = attributes.theme;
+  if (attributes.author != null) meta.author = String(attributes.author);
+  if (attributes.date != null) meta.date = String(attributes.date);
+  if (attributes.footer != null) meta.footer = String(attributes.footer);
+  if (attributes.logo != null) meta.logo = String(attributes.logo) || null;
+  if (attributes.pagenumbers != null) meta.pageNumbers = attributes.pagenumbers !== false;
+  const deck = {format:FORMAT, version:VERSION, meta, assets:{}, slides:[]};
+  splitMarkdownSlides(body).forEach((slideText, index) => deck.slides.push(markdownSlideFromText(slideText, index, deck)));
+  if (!attributes.title && deck.slides[0]) {
+    const firstTitle = deck.slides[0].blocks.find(block => block.type === 'title')?.content;
+    if (firstTitle) deck.meta.title = firstTitle;
+  }
+  return normalizeDeck(deck);
+}
+
 /* ---------- Deck loading ---------- */
 function deckFromText(text, filename = 'presentation') {
   const source = String(text || '').trim();
@@ -4598,6 +4810,7 @@ function deckFromText(text, filename = 'presentation') {
     validateDeckInput(parsed);
     return normalizeDeck(parsed);
   }
+  if (/\.(?:md|markdown)$/i.test(filename)) return importMarkdownDeck(source, filename);
   return importLegacyDeck(source, filename);
 }
 async function applyDeck(deck, {filename = 'presentation.json', baseUrl = state.baseUrl, preservePrevious = true, requestedSlideId = null, fileHandle = null} = {}) {
@@ -4620,15 +4833,15 @@ async function applyDeck(deck, {filename = 'presentation.json', baseUrl = state.
 async function loadFile(file, {fileHandle = null} = {}) {
   const text = await file.text();
   const deck = deckFromText(text, file.name);
-  await applyDeck(deck, {filename:file.name.replace(/\.(txt|json)$/i, '') + '.json', baseUrl:new URL('.', location.href).href, fileHandle});
+  await applyDeck(deck, {filename:file.name.replace(/\.(txt|json|md|markdown)$/i, '') + '.json', baseUrl:new URL('.', location.href).href, fileHandle});
 }
 function candidateUrls(deckValue) {
   const value = String(deckValue || '').trim();
   if (!value) return [];
   const hasSlash = value.includes('/');
   const hasExtension = /\.[A-Za-z0-9]+(?:[?#].*)?$/.test(value);
-  if (!hasSlash && !hasExtension) return [`${value}/${value}.json`, `${value}/${value}.txt`];
-  if (!hasExtension) return [value, `${value}.json`, `${value}.txt`];
+  if (!hasSlash && !hasExtension) return [`${value}/${value}.json`, `${value}/${value}.txt`, `${value}/${value}.md`];
+  if (!hasExtension) return [value, `${value}.json`, `${value}.txt`, `${value}.md`];
   return [value];
 }
 async function loadFromQuery(deckValue) {
@@ -4944,7 +5157,7 @@ async function publishDeck() {
 async function openDeck() {
   if ('showOpenFilePicker' in window) {
     try {
-      const [handle] = await window.showOpenFilePicker({multiple:false, types:[{description:'ModernSlides deck', accept:{'application/json':['.json'], 'text/plain':['.txt']}}]});
+      const [handle] = await window.showOpenFilePicker({multiple:false, types:[{description:'ModernSlides deck', accept:{'application/json':['.json'], 'text/plain':['.txt'], 'text/markdown':['.md','.markdown']}}]});
       if (!handle) return;
       await loadFile(await handle.getFile(), {fileHandle:handle});
       return;

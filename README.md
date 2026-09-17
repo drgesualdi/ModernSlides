@@ -10,6 +10,52 @@ Press **e** to toggle between edit and present, **f** to go full screen, and **s
 copy of your current deck; the clock icon restores the most recent deck from a prior session (if different from the one already
 open).  Undo/redo keeps a five-step history of recent edits.  You advance slides with Left/Right arrows, Page Up/Down, Space, Home, and End.
 
+## Import a complete Markdown presentation
+
+Choose **Open** and select a `.md` or `.markdown` file to turn one Markdown document into a ModernSlides deck. Use a line containing only `---` between slides. The importer understands headings, paragraphs, ordered and unordered lists, standalone images, blockquotes, fenced code blocks, and Markdown tables.
+
+```markdown
+---
+title: My presentation
+theme: bauhaus
+author: Ada Lovelace
+footer: Internal
+page-numbers: true
+---
+
+# Opening slide
+
+A short introduction with **Markdown** formatting.
+
+---
+
+# Evidence
+
+- First result
+- Second result
+
+![A useful chart](images/chart.png)
+
+:::notes
+These notes appear in the speaker window.
+:::
+```
+
+Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, and `page-numbers`. Speaker notes use `:::notes` or `:::speaker-notes`; print-only notes use `:::print-notes`.
+
+Slide-level settings can be added as HTML comments and remain invisible in the rendered slide:
+
+```markdown
+<!-- layout: statement -->
+<!-- background: images/photo.jpg -->
+<!-- background-full: images/diagram.png -->
+<!-- header: Section name -->
+<!-- aside: Supporting annotation -->
+<!-- hidden: true -->
+```
+
+Valid layouts are `auto`, `top`, `center`, `statement`, `data`, and `full`. Relative image paths are resolved from the location of the Markdown file when it is loaded from a URL.
+
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  
 # Slide format overview

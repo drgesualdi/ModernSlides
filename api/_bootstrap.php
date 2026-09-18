@@ -5,16 +5,20 @@ declare(strict_types=1);
 /*
  * ModernSlides publishing bootstrap.
  *
- * This file deliberately finds the HostGator account root by walking
- * upward until it reaches the directory named "public_html".
+ * This file finds the hosting account root either by walking upward to
+ * "public_html" or by using the web server's configured document root.
  *
- * Therefore both of these layouts work:
+ * Therefore all of these layouts work:
  *
  *   /home/user/public_html/ModernSlides/api/
  *
  * and:
  *
  *   /home/user/public_html/kevinbryanecon.com/ModernSlides/api/
+ *
+ * and provider-specific document roots such as:
+ *
+ *   /home/user/new.example.com/ModernSlides/api/
  */
 
 function ms_fail_bootstrap(string $message): never
@@ -27,11 +31,13 @@ function ms_fail_bootstrap(string $message): never
 
 function ms_account_root(): string
 {
-    $dir = realpath(__DIR__);
+    $apiDir = realpath(__DIR__);
 
-    if ($dir === false) {
+    if ($apiDir === false) {
         ms_fail_bootstrap('Could not resolve the ModernSlides API directory.');
     }
+
+    $dir = $apiDir;
 
     for ($i = 0; $i < 12; $i++) {
         if (basename($dir) === 'public_html') {
@@ -47,8 +53,35 @@ function ms_account_root(): string
         $dir = $parent;
     }
 
+    $documentRootValue = trim(
+        (string)($_SERVER['DOCUMENT_ROOT'] ?? '')
+    );
+
+    $documentRoot =
+        $documentRootValue !== ''
+            ? realpath($documentRootValue)
+            : false;
+
+    if ($documentRoot !== false) {
+        $documentRoot = rtrim(
+            $documentRoot,
+            DIRECTORY_SEPARATOR
+        );
+
+        $documentPrefix =
+            $documentRoot .
+            DIRECTORY_SEPARATOR;
+
+        if (
+            $apiDir === $documentRoot ||
+            strpos($apiDir, $documentPrefix) === 0
+        ) {
+            return dirname($documentRoot);
+        }
+    }
+
     ms_fail_bootstrap(
-        'ModernSlides publishing must be installed somewhere beneath public_html.'
+        'ModernSlides publishing must be installed beneath this website\'s document root.'
     );
 }
 
@@ -62,7 +95,7 @@ if (
     is_link($configFile)
 ) {
     ms_fail_bootstrap(
-        'Publishing configuration was not found outside public_html.'
+        'Publishing configuration was not found outside the website document root.'
     );
 }
 

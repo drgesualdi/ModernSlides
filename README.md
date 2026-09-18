@@ -206,6 +206,12 @@ Some HostGator or other web hosting accounts use `public_html` itself as the dom
 
 Both are supported. 
 
+Some providers, including Spaceship, may use a domain-named document root without a `public_html` directory, for example:
+
+    /home/YOUR_CPANEL_USER/new.example.com/
+
+This layout is also supported. In that case, place `.modernslides-publish.php` one level above the domain-named document root, such as `/home/YOUR_CPANEL_USER/.modernslides-publish.php`.
+
 STEP 1: 
 
 Create:

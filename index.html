@@ -317,6 +317,11 @@ button:disabled { cursor: not-allowed; opacity: .42; }
   line-height: 1.42;
 }
 .block-list li { margin: .18em 0; padding-left: .14em; }
+.block-list .nested-list {
+  margin: .12em 0 .08em;
+  padding-left: 1.35em;
+  font-size: 1em;
+}
 .block-list.size-big { --text-size: var(--big-scale); }
 .block-list.size-small { --text-size: var(--small-scale); color: var(--accent-2); }
 .block-list.size-tiny { --text-size: var(--tiny-scale); color: var(--accent-2); }
@@ -2280,7 +2285,7 @@ function validateBlockInput(block, path, errors) {
     });
   }
   if (block.type === 'list' && Array.isArray(block.items)) {
-    block.items.forEach((item,index) => collectUnknownKeys(item, new Set(['content','step','until','number']), `${path}.items[${index}]`, errors));
+    block.items.forEach((item,index) => collectUnknownKeys(item, new Set(['content','step','until','number','level','ordered']), `${path}.items[${index}]`, errors));
   }
   if (block.type === 'table' && Array.isArray(block.rows)) {
     block.rows.forEach((row,rowIndex) => {
@@ -2484,10 +2489,14 @@ function normalizeBlock(block) {
       out.size = typeof out.size === 'number' ? Math.max(.2, Math.min(5, out.size)) : (['big','normal','small','tiny'].includes(out.size) ? out.size : 'normal');
       out.items = Array.isArray(out.items) ? out.items.map((item, index) => {
         const itemStep = item?.step != null ? Math.max(0, Math.trunc(Number(item.step) || 0)) : null;
-        const normalized = {content: String(item?.content ?? '')};
+        const normalized = {
+          content: String(item?.content ?? ''),
+          level: Math.max(0, Math.trunc(Number(item?.level) || 0)),
+          ordered: item?.ordered == null ? out.ordered : !!item.ordered
+        };
         if (itemStep != null) normalized.step = itemStep;
         if (item?.until != null) normalized.until = Math.max(itemStep || 0, Math.trunc(Number(item.until) || 0));
-        if (out.ordered) normalized.number = Math.max(1, Math.trunc(Number(item?.number) || (out.start + index)));
+        if (normalized.ordered) normalized.number = Math.max(1, Math.trunc(Number(item?.number) || (out.start + index)));
         return normalized;
       }) : [];
       break;
@@ -2840,6 +2849,38 @@ function parseListLine(line) {
   }
   return {ordered:!!match[2], number:match[2] ? Number(match[2]) : null, marker:match[2] ? `${match[2]}.` : match[3], indent:indentWidth(match[1]), content, itemStep, itemUntil};
 }
+function consumeListItems(lines, startIndex) {
+  const first = parseListLine(lines[startIndex]);
+  if (!first) return null;
+  const indentLevels = [first.indent];
+  const items = [];
+  let i = startIndex;
+  while (i < lines.length) {
+    const match = parseListLine(lines[i]);
+    if (!match || match.indent < first.indent) break;
+    if (match.indent === first.indent && match.ordered !== first.ordered) break;
+    while (indentLevels.length > 1 && match.indent < indentLevels.at(-1)) indentLevels.pop();
+    if (match.indent > indentLevels.at(-1)) indentLevels.push(match.indent);
+    const item = {content:match.content, level:indentLevels.length - 1, ordered:match.ordered};
+    if (match.ordered) item.number = match.number;
+    if (match.itemStep != null) {
+      item.step = match.itemStep;
+      if (match.itemUntil != null) item.until = match.itemUntil;
+    }
+    const baseIndent = match.indent;
+    i++;
+    const continuation = [];
+    while (i < lines.length && lines[i].trim()) {
+      if (parseListLine(lines[i])) break;
+      if (indentWidth(lines[i]) <= baseIndent) break;
+      continuation.push(lines[i].replace(/^\s+/, ''));
+      i++;
+    }
+    if (continuation.length) item.content += '\n' + continuation.join('\n');
+    items.push(item);
+  }
+  return {ordered:first.ordered, start:first.ordered ? first.number : 1, items, nextIndex:i};
+}
 function makeTextBlocks(raw, size, ctx, props = {}) {
   const lines = cleanText(raw).split('\n');
   const blocks = [];
@@ -2849,34 +2890,12 @@ function makeTextBlocks(raw, size, ctx, props = {}) {
     if (i >= lines.length) break;
     const listMatch = parseListLine(lines[i]);
     if (listMatch) {
-      const ordered = listMatch.ordered;
-      const start = ordered ? listMatch.number : 1;
-      const items = [];
+      const parsed = consumeListItems(lines, i);
+      const {ordered, start, items} = parsed;
       const requestedProgressiveStart = Number(props.progressiveStart);
       const progressiveStart = props.progressive ? (Number.isFinite(requestedProgressiveStart) && requestedProgressiveStart > 0 ? Math.trunc(requestedProgressiveStart) : Math.max(1, props.step || ctx.step || 1)) : 0;
-      while (i < lines.length) {
-        const match = parseListLine(lines[i]);
-        if (!match || match.ordered !== ordered) break;
-        const item = {content: match.content};
-        if (ordered) item.number = match.number;
-        if (match.itemStep != null) {
-          item.step = match.itemStep;
-          if (match.itemUntil != null) item.until = match.itemUntil;
-        } else if (props.progressive) {
-          item.step = progressiveStart + items.length;
-        }
-        const baseIndent = match.indent;
-        i++;
-        const continuation = [];
-        while (i < lines.length && lines[i].trim()) {
-          if (parseListLine(lines[i])) break;
-          if (indentWidth(lines[i]) <= baseIndent) break;
-          continuation.push(lines[i].replace(/^\s+/, ''));
-          i++;
-        }
-        if (continuation.length) item.content += '\n' + continuation.join('\n');
-        items.push(item);
-      }
+      if (props.progressive) items.forEach((item, index) => { if (item.step == null) item.step = progressiveStart + index; });
+      i = parsed.nextIndex;
       const block = {type:'list', ordered, start, progressive:!!props.progressive, size, items, step:props.step ?? ctx.step};
       if (props.until != null) block.until = props.until;
       if (props.align) block.align = props.align;
@@ -3135,8 +3154,11 @@ function indentText(text, spaces = 2) {
 }
 function effectiveBlockStep(block) { return Math.max(0, Math.trunc(Number(block?.step) || 0)); }
 function renderListItemText(item, block, index) {
-  const number = block.ordered ? Math.max(1, Math.trunc(Number(item?.number) || (block.start || 1) + index)) : null;
-  const marker = block.ordered ? `${number}.` : '-';
+  const level = Math.max(0, Math.trunc(Number(item?.level) || 0));
+  const ordered = item?.ordered == null ? block.ordered : !!item.ordered;
+  const number = ordered ? Math.max(1, Math.trunc(Number(item?.number) || (block.start || 1) + index)) : null;
+  const marker = ordered ? `${number}.` : '-';
+  const pad = '  '.repeat(level);
   let meta = '';
   const step = item?.step == null ? null : Math.max(0, Math.trunc(Number(item.step) || 0));
   const until = item?.until == null ? null : Math.max(step || 0, Math.trunc(Number(item.until) || 0));
@@ -3145,8 +3167,8 @@ function renderListItemText(item, block, index) {
   const isCanonicalProgressive = block.progressive && step === progressiveExpected && until == null;
   if (step != null && !isCanonicalProgressive) meta = ` [step=${step}${until != null ? `-${until}` : ''}]`;
   const contentLines = escapeDirectiveValue(item?.content || '').split('\n');
-  const first = `${marker}${meta} ${contentLines.shift() || ''}`;
-  return [first, ...contentLines.map(line => `  ${line}`)].join('\n');
+  const first = `${pad}${marker}${meta} ${contentLines.shift() || ''}`;
+  return [first, ...contentLines.map(line => `${pad}  ${line}`)].join('\n');
 }
 function renderBlockText(block, indent = 0) {
   const pad = ' '.repeat(indent);
@@ -3570,6 +3592,49 @@ function applyStepAttributes(element, item) {
   if (item?.until != null) element.dataset.until = String(Number(item.until) || 0);
   if (item?.align) element.classList.add(`align-${item.align}`);
 }
+function listItemTree(items) {
+  const roots = [];
+  const stack = [{level:-1, children:roots}];
+  let previousLevel = 0;
+  (items || []).forEach(source => {
+    let level = Math.max(0, Math.trunc(Number(source?.level) || 0));
+    level = Math.min(level, previousLevel + 1);
+    while (stack.length > 1 && stack.at(-1).level >= level) stack.pop();
+    const node = {item:{...source, level}, children:[]};
+    stack.at(-1).children.push(node);
+    stack.push({level, children:node.children});
+    previousLevel = level;
+  });
+  return roots;
+}
+function renderListNodes(list, nodes, block, doc) {
+  nodes.forEach((node, index) => {
+    const li = doc.createElement('li');
+    li.innerHTML = inlineMarkup(node.item.content);
+    const ordered = node.item?.ordered == null ? block.ordered : !!node.item.ordered;
+    if (ordered && node.item?.number != null) li.value = Math.max(1, Math.trunc(Number(node.item.number) || 1));
+    applyStepAttributes(li, node.item);
+    list.appendChild(li);
+    let group = [];
+    let groupOrdered = null;
+    const flush = () => {
+      if (!group.length) return;
+      const nested = doc.createElement(groupOrdered ? 'ol' : 'ul');
+      nested.className = 'nested-list';
+      if (groupOrdered && group[0].item?.number != null) nested.start = Math.max(1, Math.trunc(Number(group[0].item.number) || 1));
+      renderListNodes(nested, group, block, doc);
+      li.appendChild(nested);
+      group = [];
+    };
+    node.children.forEach(child => {
+      const childOrdered = child.item?.ordered == null ? block.ordered : !!child.item.ordered;
+      if (group.length && childOrdered !== groupOrdered) flush();
+      groupOrdered = childOrdered;
+      group.push(child);
+    });
+    flush();
+  });
+}
 function renderBlock(block, doc = document) {
   let element;
   switch (block.type) {
@@ -3589,13 +3654,7 @@ function renderBlock(block, doc = document) {
       element.className = `slide-block block-list ${typeof block.size === 'string' ? `size-${block.size}` : ''}`;
       if (typeof block.size === 'number') element.style.setProperty('--text-size', String(block.size));
       if (block.ordered) element.start = Math.max(1, Math.trunc(Number(block.start) || 1));
-      block.items.forEach((item, index) => {
-        const li = doc.createElement('li');
-        li.innerHTML = inlineMarkup(item.content);
-        if (block.ordered && item?.number != null && Number(item.number) !== element.start + index) li.value = Math.max(1, Math.trunc(Number(item.number) || 1));
-        applyStepAttributes(li, item);
-        element.appendChild(li);
-      });
+      renderListNodes(element, listItemTree(block.items), block, doc);
       break;
     }
     case 'quote': {
@@ -4764,22 +4823,9 @@ function markdownSlideFromText(text, index, deck) {
 
     const listStart = parseListLine(raw);
     if (listStart) {
-      const ordered = listStart.ordered;
-      const items = [];
-      const start = ordered ? listStart.number : 1;
-      while (i < lines.length) {
-        const itemLine = parseListLine(lines[i]);
-        if (!itemLine || itemLine.ordered !== ordered) break;
-        const item = {content:itemLine.content};
-        if (ordered) item.number = itemLine.number;
-        const baseIndent = itemLine.indent;
-        i++;
-        const continuation = [];
-        while (i < lines.length && lines[i].trim() && !parseListLine(lines[i]) && indentWidth(lines[i]) > baseIndent) continuation.push(lines[i++].replace(/^\s+/, ''));
-        if (continuation.length) item.content += `\n${continuation.join('\n')}`;
-        items.push(item);
-      }
-      blocks.push({type:'list', ordered, start, progressive:false, size:'normal', items});
+      const parsed = consumeListItems(lines, i);
+      blocks.push({type:'list', ordered:parsed.ordered, start:parsed.start, progressive:false, size:'normal', items:parsed.items});
+      i = parsed.nextIndex;
       continue;
     }
 
@@ -4836,9 +4882,12 @@ function markdownTableRow(cells) {
   return `| ${values.join(' | ')} |`;
 }
 function markdownListItem(item, block, index) {
-  const marker = block.ordered ? `${Math.max(1, Math.trunc(Number(item?.number) || (block.start || 1) + index))}.` : '-';
+  const level = Math.max(0, Math.trunc(Number(item?.level) || 0));
+  const ordered = item?.ordered == null ? block.ordered : !!item.ordered;
+  const marker = ordered ? `${Math.max(1, Math.trunc(Number(item?.number) || (block.start || 1) + index))}.` : '-';
+  const pad = '  '.repeat(level);
   const lines = String(item?.content ?? '').split('\n');
-  return [`${marker} ${lines.shift() || ''}`, ...lines.map(line => `  ${line}`)].join('\n');
+  return [`${pad}${marker} ${lines.shift() || ''}`, ...lines.map(line => `${pad}  ${line}`)].join('\n');
 }
 function blockToMarkdown(block) {
   switch (block.type) {
@@ -4918,7 +4967,12 @@ function runMarkdownRoundTripSelfTest() {
           blocks:[
             {type:'title', content:'Opening'},
             {type:'text', size:'normal', content:'A **Markdown** paragraph.'},
-            {type:'list', ordered:false, start:1, progressive:false, size:'normal', items:[{content:'First'},{content:'Second'}]},
+            {type:'list', ordered:false, start:1, progressive:false, size:'normal', items:[
+              {content:'First', level:0, ordered:false},
+              {content:'Nested bullet', level:1, ordered:false},
+              {content:'Nested numbered detail', level:2, ordered:true, number:1},
+              {content:'Second', level:0, ordered:false}
+            ]},
             {type:'quote', content:'A useful quotation.', source:'Source'}
           ]
         },
@@ -4944,6 +4998,7 @@ function runMarkdownRoundTripSelfTest() {
       imported.slides[0].background?.mode === 'full',
       imported.slides[0].speaker === 'Speaker note\n\nPrint note',
       imported.slides[0].print === 'Speaker note\n\nPrint note',
+      imported.slides[0].blocks.some(block => block.type === 'list' && block.items?.[1]?.level === 1 && block.items?.[2]?.level === 2 && block.items?.[2]?.ordered === true),
       imported.slides[0].blocks.some(block => block.type === 'quote' && block.source === 'Source'),
       imported.slides[1].blocks.some(block => block.type === 'table' && block.rows?.[1]?.[1] === '42'),
       imported.slides[1].blocks.some(block => block.type === 'code' && block.content.includes("'---'")),
@@ -6077,6 +6132,30 @@ function alignSelection(align) {
   textarea.dispatchEvent(new Event('input', {bubbles:true}));
   textarea.focus();
 }
+function indentEditorLines(outdent = false) {
+  const textarea = $('body-editor');
+  const value = textarea.value;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+  const selectionTail = end > start && value[end - 1] === '\n' ? end - 1 : end;
+  const nextBreak = value.indexOf('\n', selectionTail);
+  const lineEnd = nextBreak < 0 ? value.length : nextBreak;
+  const lines = value.slice(lineStart, lineEnd).split('\n');
+  const firstRemoved = outdent ? ((lines[0].match(/^(?: {1,2}|\t)/) || [''])[0].length) : 0;
+  const replacement = lines.map(line => outdent ? line.replace(/^(?: {1,2}|\t)/, '') : `  ${line}`).join('\n');
+  textarea.setRangeText(replacement, lineStart, lineEnd, 'select');
+  if (start === end) {
+    const cursor = outdent ? Math.max(lineStart, start - firstRemoved) : start + 2;
+    textarea.selectionStart = cursor;
+    textarea.selectionEnd = cursor;
+  } else {
+    textarea.selectionStart = lineStart;
+    textarea.selectionEnd = lineStart + replacement.length;
+  }
+  textarea.dispatchEvent(new Event('input', {bubbles:true}));
+  textarea.focus();
+}
 function expandSingleLetterShortcut(event) {
   if (event.key !== ':') return;
   const textarea = event.currentTarget;
@@ -6198,6 +6277,11 @@ function setupEvents() {
   $('body-editor').addEventListener('blur', () => debouncedCommit.flush());
   $('notes-editor').addEventListener('blur', () => debouncedCommit.flush());
   $('body-editor').addEventListener('keydown', event => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      indentEditorLines(event.shiftKey);
+      return;
+    }
     const bold = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b';
     if (bold) {
       event.preventDefault();

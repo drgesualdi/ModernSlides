@@ -32,6 +32,8 @@ A short introduction with **Markdown** formatting.
 # Evidence
 
 - First result
+  - Supporting detail
+    1. Numbered detail inside the bullet
 - Second result
 
 ![A useful chart](images/chart.png)
@@ -97,7 +99,7 @@ Examples and common directives are shown below:
       # --- ALIGNMENT & LISTS ---
       Alignment is written as an argument: Title(align=center):, Text(align=left):, or BigText(align=right):
       *italic* or _italic_ is italic, **bold** is bold, and ***bold italic*** is bold italic.
-      Lists use standard -, +, or * markers followed by a space. Indent continuation lines beneath an item.
+      Lists use standard -, +, or * markers followed by a space. Indent nested items by two or four spaces; ordered and unordered styles can be mixed at different levels. In the slide editor, Tab indents the current or selected lines and Shift-Tab moves them back out. Indent continuation lines beneath an item.
       Ordered lists starting with a number will preserve their starting number.
       Add the positional argument `steps` to any text role to reveal its list items one at a time: e.g., Text(steps):
 

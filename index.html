@@ -4653,12 +4653,20 @@ function markdownImage(line) {
   const match = String(line ?? '').trim().match(/^!\[([^\]]*)\]\(\s*(\S+?)(?:\s+["'][^"']*["'])?\s*\)$/);
   return match ? {caption:match[1], src:match[2]} : null;
 }
+function markdownYouTube(line) {
+  const source = String(line ?? '').trim();
+  const link = source.match(/^\[([^\]]*)\]\(\s*(https?:\/\/\S+?)(?:\s+["'][^"']*["'])?\s*\)$/);
+  const autolink = source.match(/^<\s*(https?:\/\/[^>\s]+)\s*>$/);
+  const bare = source.match(/^(https?:\/\/\S+)$/);
+  const url = link?.[2] || autolink?.[1] || bare?.[1] || '';
+  return url && youtubeInfo(url) ? {src:url, label:link?.[1] || ''} : null;
+}
 function isMarkdownBoundary(lines, index) {
   const line = lines[index] || '';
   const trimmed = line.trim();
   if (!trimmed) return true;
   if (/^#{1,6}\s+/.test(trimmed) || /^(`{3,}|~{3,})/.test(trimmed) || /^:::(?:notes|speaker-notes|print-notes)\s*$/i.test(trimmed)) return true;
-  if (markdownImage(trimmed) || /^>\s?/.test(trimmed) || parseListLine(line)) return true;
+  if (markdownImage(trimmed) || markdownYouTube(trimmed) || /^>\s?/.test(trimmed) || parseListLine(line)) return true;
   return index + 1 < lines.length && trimmed.includes('|') && isMarkdownTableDivider(lines[index + 1]);
 }
 function markdownSlideFromText(text, index, deck) {
@@ -4725,6 +4733,13 @@ function markdownSlideFromText(text, index, deck) {
     const image = markdownImage(trimmed);
     if (image) {
       blocks.push({type:'image', src:image.src, caption:image.caption, width:'100%', fit:'contain', focus:'center'});
+      i++;
+      continue;
+    }
+
+    const youtube = markdownYouTube(trimmed);
+    if (youtube) {
+      blocks.push({type:'website', src:youtube.src, poster:''});
       i++;
       continue;
     }
@@ -4916,7 +4931,8 @@ function runMarkdownRoundTripSelfTest() {
           blocks:[
             {type:'title', content:'Data'},
             {type:'table', widths:[], headerRows:1, headerCols:0, columnAlign:['l','r'], rows:[['Metric','Value'],['Result','42']]},
-            {type:'code', lang:'javascript', content:"const divider = '---';"}
+            {type:'code', lang:'javascript', content:"const divider = '---';"},
+            {type:'website', src:'https://youtu.be/JQ8ZiT1sn88?t=90', poster:''}
           ]
         }
       ]
@@ -4934,7 +4950,8 @@ function runMarkdownRoundTripSelfTest() {
       imported.slides[0].print === 'Print note',
       imported.slides[0].blocks.some(block => block.type === 'quote' && block.source === 'Source'),
       imported.slides[1].blocks.some(block => block.type === 'table' && block.rows?.[1]?.[1] === '42'),
-      imported.slides[1].blocks.some(block => block.type === 'code' && block.content.includes("'---'"))
+      imported.slides[1].blocks.some(block => block.type === 'code' && block.content.includes("'---'")),
+      imported.slides[1].blocks.some(block => block.type === 'website' && youtubeInfo(block.src)?.id === 'JQ8ZiT1sn88')
     ];
     return {ok:checks.every(Boolean), markdown, imported};
   } catch (error) {

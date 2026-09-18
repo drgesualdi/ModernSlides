@@ -43,6 +43,12 @@ These notes appear in the speaker window.
 
 Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, and `page-numbers`. Speaker notes use `:::notes` or `:::speaker-notes`; print-only notes use `:::print-notes`.
 
+A standalone YouTube watch, shortened, Shorts, Live, or embed URL becomes a playable embedded-video slide block. A normal Markdown link works too, as long as it is alone on its line:
+
+```markdown
+[Watch the video](https://www.youtube.com/watch?v=JQ8ZiT1sn88&t=90s)
+```
+
 Slide-level settings can be added as HTML comments and remain invisible in the rendered slide:
 
 ```markdown

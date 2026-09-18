@@ -11,7 +11,7 @@ page-numbers: true
 Write the presentation in **Markdown**, then open it in ModernSlides.
 
 :::notes
-This note should appear only in the speaker window.
+This note appears in speaker view and when printing with notes.
 :::
 
 ---
@@ -32,7 +32,7 @@ This note should appear only in the speaker window.
 | Feature | Status |
 | :--- | ---: |
 | Headings | Ready |
-| Speaker notes | Ready |
+| Unified notes | Ready |
 
 ```javascript
 const dividerInsideCode = '---';

@@ -1580,16 +1580,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
   font-family: var(--ui-font);
 }
 #notes-pane { min-height: 0; display: grid; grid-template-rows: auto minmax(0,1fr); }
-#notes-tabs { display: flex; gap: 0; padding: 0; border-bottom: 1px solid var(--ui-line); }
-#notes-tabs button {
-  padding: .4rem .75rem;
-  border: 0;
-  border-right: 1px solid var(--ui-line);
-  border-radius: 0;
-  background: #e9e6df;
-  color: #444;
-}
-#notes-tabs button.active { background: #fff; font-weight: 700; }
+#notes-label { padding: .4rem .75rem; border-bottom: 1px solid var(--ui-line); background: #e9e6df; color: #444; font-weight: 700; }
 .notes-editor {
   width: 100%;
   height: 100%;
@@ -1920,12 +1911,8 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
           </label>
         </div>
         <div id="notes-pane">
-          <div id="notes-tabs">
-            <button id="speaker-tab" type="button" class="active">Speaker Notes</button>
-            <button id="print-tab" type="button">Print Annotations</button>
-          </div>
-          <textarea id="speaker-editor" class="notes-editor" aria-label="Speaker notes" placeholder="Speaker notes"></textarea>
-          <textarea id="print-editor" class="notes-editor hidden" aria-label="Print notes" placeholder="Print notes"></textarea>
+          <div id="notes-label">Notes · speaker view and print</div>
+          <textarea id="notes-editor" class="notes-editor" aria-label="Slide notes" placeholder="Notes shown in speaker view and printed notes"></textarea>
         </div>
       </section>
     </div>
@@ -2410,6 +2397,13 @@ function nextSlideId(deck) {
 function defaultMeta(title = 'New Presentation') {
   return { title, theme: 'bauhaus', author: '', date: '', footer: '', pageNumbers: true, logo: null };
 }
+function mergeSlideNotes(speaker, print) {
+  const speakerText = String(speaker ?? '').trim();
+  const printText = String(print ?? '').trim();
+  if (!speakerText) return printText;
+  if (!printText || printText === speakerText) return speakerText;
+  return `${speakerText}\n\n${printText}`;
+}
 function freshSlide(title = 'New slide', id = '') {
   return {
     id,
@@ -2458,7 +2452,6 @@ const state = {
   speakerWindow: null,
   speakerTimer: null,
   speakerStartedAt: 0,
-  activeNotesTab: 'speaker',
   printPrepared: false,
   dragSlideId: null,
   dirty: false,
@@ -2540,18 +2533,21 @@ function normalizeDeck(input) {
     version: VERSION,
     meta: {...defaultMeta(), ...(input.meta || {})},
     assets: input.assets && typeof input.assets === 'object' ? deepClone(input.assets) : {},
-    slides: Array.isArray(input.slides) ? input.slides.map(slide => ({
-      id: slide?.id == null ? '' : String(slide.id).trim(),
-      hidden: !!slide?.hidden,
-      layout: LAYOUTS.has(slide?.layout) ? slide.layout : 'auto',
-      background: slide?.background?.src ? {src:String(slide.background.src), mode: slide.background.mode === 'full' ? 'full' : 'tint'} : null,
-      header: String(slide?.header ?? ''),
-      aside: String(slide?.aside ?? ''),
-      speaker: String(slide?.speaker ?? ''),
-      print: String(slide?.print ?? ''),
-      steps: 0,
-      blocks: Array.isArray(slide?.blocks) ? slide.blocks.map(normalizeBlock) : []
-    })) : []
+    slides: Array.isArray(input.slides) ? input.slides.map(slide => {
+      const notes = mergeSlideNotes(slide?.speaker, slide?.print);
+      return {
+        id: slide?.id == null ? '' : String(slide.id).trim(),
+        hidden: !!slide?.hidden,
+        layout: LAYOUTS.has(slide?.layout) ? slide.layout : 'auto',
+        background: slide?.background?.src ? {src:String(slide.background.src), mode: slide.background.mode === 'full' ? 'full' : 'tint'} : null,
+        header: String(slide?.header ?? ''),
+        aside: String(slide?.aside ?? ''),
+        speaker: notes,
+        print: notes,
+        steps: 0,
+        blocks: Array.isArray(slide?.blocks) ? slide.blocks.map(normalizeBlock) : []
+      };
+    }) : []
   };
   if (!deck.slides.length) deck.slides.push(freshSlide('New slide', 'slide1'));
   deck.meta.title = String(deck.meta.title || 'Untitled Presentation');
@@ -3438,6 +3434,7 @@ function commitEditor({record = true, rerender = true} = {}) {
   if (!oldSlide) return false;
   const parsed = parseBody($('body-editor').value);
   const requestedId = oldSlide.id;
+  const notes = $('notes-editor').value;
   const newSlide = {
     ...deepClone(oldSlide),
     id: requestedId,
@@ -3445,8 +3442,8 @@ function commitEditor({record = true, rerender = true} = {}) {
     header: parsed.header,
     aside: parsed.aside,
     background: parsed.background,
-    speaker: $('speaker-editor').value,
-    print: $('print-editor').value,
+    speaker: notes,
+    print: notes,
     blocks: parsed.blocks.map(normalizeBlock),
     steps: parsed.steps
   };
@@ -3473,8 +3470,7 @@ function loadEditorsFromCurrent() {
   $('editor-slide-id').textContent = slide.id;
   $('slide-layout').value = slide.layout || 'auto';
   $('body-editor').value = slideToText(slide);
-  $('speaker-editor').value = slide.speaker || '';
-  $('print-editor').value = slide.print || '';
+  $('notes-editor').value = mergeSlideNotes(slide.speaker, slide.print);
   $('toggle-hidden').innerHTML = slide.hidden ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
   $('toggle-hidden').title = slide.hidden ? 'Show slide' : 'Hide slide';
   state.currentStep = Math.min(state.currentStep, slide.steps || 0);
@@ -4888,8 +4884,8 @@ function slideToMarkdown(slide) {
   if (slide.aside) sections.push(`<!-- aside: ${slide.aside.replace(/-->/g, '--&gt;')} -->`);
   const body = blocksToMarkdown(slide.blocks);
   if (body) sections.push(body);
-  if (slide.speaker) sections.push(`:::notes\n${slide.speaker}\n:::`);
-  if (slide.print) sections.push(`:::print-notes\n${slide.print}\n:::`);
+  const notes = mergeSlideNotes(slide.speaker, slide.print);
+  if (notes) sections.push(`:::notes\n${notes}\n:::`);
   return sections.join('\n\n').trim();
 }
 function deckToMarkdown(deck = state.deck) {
@@ -4946,8 +4942,8 @@ function runMarkdownRoundTripSelfTest() {
       imported.slides.length === 2,
       imported.slides[0].layout === 'statement',
       imported.slides[0].background?.mode === 'full',
-      imported.slides[0].speaker === 'Speaker note',
-      imported.slides[0].print === 'Print note',
+      imported.slides[0].speaker === 'Speaker note\n\nPrint note',
+      imported.slides[0].print === 'Speaker note\n\nPrint note',
       imported.slides[0].blocks.some(block => block.type === 'quote' && block.source === 'Source'),
       imported.slides[1].blocks.some(block => block.type === 'table' && block.rows?.[1]?.[1] === '42'),
       imported.slides[1].blocks.some(block => block.type === 'code' && block.content.includes("'---'")),
@@ -5740,8 +5736,8 @@ const SCHUMPETER_DEMO_V2 = {
       "background": null,
       "header": "Comparison",
       "aside": "",
-      "speaker": "Use S to open the speaker window.",
-      "print": "The speaker and print notes are separate JSON fields and cannot affect slide layout.",
+      "speaker": "Use S to open speaker view. This same note also appears when printing with notes.",
+      "print": "Use S to open speaker view. This same note also appears when printing with notes.",
       "steps": 0,
       "blocks": [
         {
@@ -6100,13 +6096,6 @@ function expandSingleLetterShortcut(event) {
   textarea.setRangeText(replacement, lineStart, cursor, 'end');
   textarea.dispatchEvent(new Event('input', {bubbles:true}));
 }
-function setNotesTab(tab) {
-  state.activeNotesTab = tab;
-  $('speaker-tab').classList.toggle('active', tab === 'speaker');
-  $('print-tab').classList.toggle('active', tab === 'print');
-  $('speaker-editor').classList.toggle('hidden', tab !== 'speaker');
-  $('print-editor').classList.toggle('hidden', tab !== 'print');
-}
 function openSettings() {
   $('setting-title').value = state.deck.meta.title || '';
   $('setting-author').value = state.deck.meta.author || '';
@@ -6204,12 +6193,10 @@ function setupEvents() {
     debouncedCommit();
   };
   $('body-editor').addEventListener('input', editorChanged);
-  $('speaker-editor').addEventListener('input', editorChanged);
-  $('print-editor').addEventListener('input', editorChanged);
+  $('notes-editor').addEventListener('input', editorChanged);
   $('slide-layout').addEventListener('change', () => commitEditor({record:true}));
   $('body-editor').addEventListener('blur', () => debouncedCommit.flush());
-  $('speaker-editor').addEventListener('blur', () => debouncedCommit.flush());
-  $('print-editor').addEventListener('blur', () => debouncedCommit.flush());
+  $('notes-editor').addEventListener('blur', () => debouncedCommit.flush());
   $('body-editor').addEventListener('keydown', event => {
     const bold = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b';
     if (bold) {
@@ -6242,9 +6229,6 @@ function setupEvents() {
     if (action === 'center') alignSelection('center');
     if (action === 'right') alignSelection('right');
   });
-  $('speaker-tab').addEventListener('click', () => setNotesTab('speaker'));
-  $('print-tab').addEventListener('click', () => setNotesTab('print'));
-
   $('thumb-list').addEventListener('click', event => {
     const thumb = event.target.closest('.thumb');
     if (!thumb) return;
@@ -6438,7 +6422,6 @@ function populateThemes() {
 async function initialize() {
   populateThemes();
   setupEvents();
-  setNotesTab('speaker');
   const selfTest = runRoundTripSelfTest();
   if (!selfTest.ok) console.error('ModernSlides round-trip self-test failed', selfTest);
   const markdownSelfTest = runMarkdownRoundTripSelfTest();

@@ -37,11 +37,11 @@ A short introduction with **Markdown** formatting.
 ![A useful chart](images/chart.png)
 
 :::notes
-These notes appear in the speaker window.
+These notes appear in speaker view and when printing with notes.
 :::
 ```
 
-Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, and `page-numbers`. Speaker notes use `:::notes` or `:::speaker-notes`; print-only notes use `:::print-notes`.
+Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, and `page-numbers`. Slide notes use `:::notes`; the same notes appear in speaker view and when printing with notes. Older files containing `:::speaker-notes` or `:::print-notes` are imported and merged automatically.
 
 A standalone YouTube watch, shortened, Shorts, Live, or embed URL becomes a playable embedded-video slide block. A normal Markdown link works too, as long as it is alone on its line:
 
@@ -62,7 +62,7 @@ Slide-level settings can be added as HTML comments and remain invisible in the r
 
 Valid layouts are `auto`, `top`, `center`, `statement`, `data`, and `full`. Relative image paths are resolved from the location of the Markdown file when it is loaded from a URL.
 
-After editing, use the **Export Markdown** button (the document icon beside View JSON) to download the complete deck as an editable `.md` file. That file can be revised in any text editor and opened in ModernSlides again. Standard Markdown content, deck metadata, slide divisions, layouts, backgrounds, hidden slides, and speaker/print notes round-trip through the export. Advanced ModernSlides-only formatting is converted to readable Markdown where possible: columns are flattened into labeled sections, embedded websites become links, and exact text/image sizing or reveal timing may need to be restored in the slide editor after re-importing.
+After editing, use the **Export Markdown** button (the document icon beside View JSON) to download the complete deck as an editable `.md` file. That file can be revised in any text editor and opened in ModernSlides again. Standard Markdown content, deck metadata, slide divisions, layouts, backgrounds, hidden slides, and notes round-trip through the export. Advanced ModernSlides-only formatting is converted to readable Markdown where possible: columns are flattened into labeled sections, embedded websites become links, and exact text/image sizing or reveal timing may need to be restored in the slide editor after re-importing.
 
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  
@@ -102,8 +102,8 @@ Examples and common directives are shown below:
       Add the positional argument `steps` to any text role to reveal its list items one at a time: e.g., Text(steps):
 
       # --- NOTES ---
-      SpeakerNote: For notes for yourself in the speaker window (opened with 's')
-      PrintNote: Notes about the slide to appear only when printed with notes (opened with 'n')
+      Notes entered in the editor appear in both the speaker window (`s`) and printed notes (`n`).
+      Legacy `SpeakerNote:` and `PrintNote:` content is merged automatically when imported.
 
       # --- PROGRESSIVE REVEAL ---
       You can reveal elements progressively like so
@@ -159,7 +159,7 @@ W: Website
       # - If you want images that are not web-linked, you can paste images into the textbox, and when you download, it will include those images.
       # - If you have browser-side spellcheck turned on, this will work in the slide editor box.
       # - If you press 'p', it will print the slides themselves.
-      # - If you press 'n' in Edit mode, it will print slides with the PrintNotes.
+      # - If you press 'n' in Edit mode, it will print slides with the same notes shown in speaker view.
       # - If no directive is given, it acts as ordinary text in the most recent structure.
       # - You cannot nest some directives (e.g., a Table inside a Column). Remember to close Columns, Tables, and Code with `End`.
       # - A thin badge appears when content overflows the 16×9 frame. Hover to see the first 20 characters that spill off the slide.

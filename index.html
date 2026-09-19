@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
-<title>ModernSlides JSON</title>
+<title>ModernSlides</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -4312,7 +4312,7 @@ function speakerDocumentHTML() {
   const styles = $('app-styles').textContent;
   const fontHref = $('font-pack').href;
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(plainTextFromMarkup(state.deck?.meta?.title) || 'ModernSlides')} — Speaker View</title>
 <link rel="stylesheet" href="${fontHref}"><style>${styles}</style>
 <script>window.MathJax={tex:{inlineMath:[[\"$\",\"$\"],[\"\\\\(\",\"\\\\)\"]],displayMath:[[\"$$\",\"$$\"],[\"\\\\[\",\"\\\\]\"]],processEscapes:true},startup:{typeset:false}};<\/script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"><\/script></head>
@@ -5035,6 +5035,7 @@ async function applyDeck(deck, {filename = 'presentation.json', baseUrl = state.
   if (state.editMode && state.deck) commitEditor({record:false});
   if (preservePrevious && state.deck) await preserveCurrentAsPrevious();
   state.deck = normalizeDeck(deck);
+  document.title = plainTextFromMarkup(state.deck.meta.title) || 'ModernSlides';
   state.filename = filename;
   state.fileHandle = fileHandle;
   state.baseUrl = baseUrl || new URL('.', location.href).href;
@@ -6203,7 +6204,7 @@ function saveSettings() {
     logo:$('setting-logo').value.trim() || null
   };
   if (JSON.stringify(nextMeta) !== JSON.stringify(state.deck.meta)) {
-    pushUndo(); state.deck.meta = nextMeta; autosave(); scheduleRender('settings');
+    pushUndo(); state.deck.meta = nextMeta; document.title = plainTextFromMarkup(nextMeta.title) || 'ModernSlides'; autosave(); scheduleRender('settings');
   }
   closeModal('settings-modal');
 }

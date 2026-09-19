@@ -1880,7 +1880,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="presentation-view" aria-label="Presentation">
+<div id="presentation-view" aria-label="Presentation" tabindex="-1">
   <div id="presentation-slot" class="stage-slot"></div>
   <nav id="mobile-nav" aria-label="Slide navigation">
     <button id="mobile-prev" type="button" aria-label="Previous">◀</button>
@@ -4264,6 +4264,7 @@ function toggleEdit(force) {
   requestAnimationFrame(() => {
     refreshAllViews({scrollThumb:false, preserveLive:false});
     fitFrameInSlot($('presentation-slot'));
+    if (!state.editMode) $('presentation-view').focus({preventScroll:true});
   });
 }
 function toggleFullscreen() {
@@ -4322,6 +4323,14 @@ function speakerDocumentHTML() {
 <script>
 window.fitSpeakerSlides=function(){document.querySelectorAll('.speaker-slot').forEach(function(slot){var frame=slot.querySelector('.slide-frame');if(!frame)return;var s=Math.max(.01,Math.min(slot.clientWidth/1600,slot.clientHeight/900));frame.style.transform='scale('+s+')';frame.style.left=((slot.clientWidth-1600*s)/2)+'px';frame.style.top=((slot.clientHeight-900*s)/2)+'px';});};
 window.addEventListener('resize',window.fitSpeakerSlides);
+document.addEventListener('keydown',function(event){
+  var key=event.key;
+  var code=event.code;
+  var next=key==='ArrowRight'||key==='ArrowDown'||key==='PageDown'||key===' '||key==='Enter'||key==='MediaTrackNext'||code==='MediaTrackNext';
+  var previous=key==='ArrowLeft'||key==='ArrowUp'||key==='PageUp'||key==='Backspace'||key==='MediaTrackPrevious'||code==='MediaTrackPrevious';
+  if(next){event.preventDefault();opener.ModernSlidesAPI.next();}
+  else if(previous){event.preventDefault();opener.ModernSlidesAPI.previous();}
+});
 <\/script></body></html>`;
 }
 function openSpeaker() {
@@ -6482,14 +6491,17 @@ function setupEvents() {
     else if (key === 's') { event.preventDefault(); openSpeaker(); }
     else if (key === 'p') { event.preventDefault(); preparePrint(false); }
     else if (key === 'n') { event.preventDefault(); preparePrint(true); }
-    else if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); nextStepOrSlide(); }
-    else if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); previousStepOrSlide(); }
+    else if (['ArrowRight','ArrowDown','PageDown',' ','Enter','MediaTrackNext'].includes(event.key) || event.code === 'MediaTrackNext') { event.preventDefault(); nextStepOrSlide(); }
+    else if (['ArrowLeft','ArrowUp','PageUp','Backspace','MediaTrackPrevious'].includes(event.key) || event.code === 'MediaTrackPrevious') { event.preventDefault(); previousStepOrSlide(); }
     else if (event.key === 'Home') { event.preventDefault(); goFirst(); }
     else if (event.key === 'End') { event.preventDefault(); goLast(); }
   });
 
   window.addEventListener('resize', () => {
     fitFrameInSlot($('presentation-slot'));
+  });
+  document.addEventListener('fullscreenchange', () => {
+    if (!state.editMode) $('presentation-view').focus({preventScroll:true});
   });
   window.addEventListener('afterprint', cleanupPrint);
   window.addEventListener('beforeunload', () => { if (state.editMode) commitEditor({record:false, rerender:false}); });
@@ -6538,7 +6550,10 @@ async function initialize() {
   await refreshRestoreAvailability();
   document.body.classList.toggle('edit-mode', state.editMode);
   refreshAllViews({scrollThumb:false, preserveLive:false});
-  requestAnimationFrame(() => fitFrameInSlot($('presentation-slot')));
+  requestAnimationFrame(() => {
+    fitFrameInSlot($('presentation-slot'));
+    if (!state.editMode) $('presentation-view').focus({preventScroll:true});
+  });
 }
 
 initialize();

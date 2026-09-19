@@ -6,7 +6,7 @@ This is a modern, very computationally light slideshow maker. It completely sepa
 
 We will begin with the format and syntax. If you don't mind downloading your slides and then manually uploading them to your website, all you need is the index.html file placed in a subfolder (e.g., yourwebsite.com/ModernSlides). Then for every slide deck, create a subsubfolder (/ModernSlides/TalkJan42027) and in that folder put the .json your downloaded (/ModernSlides/TalkJan42027/TalkJan42027.json). After you upload it, you are done. However, if you are willing to do ten minutes of work putting the attached .php files on your website, you can actually upload your slides to your website. with one click ("Publish") with a password entry. This is *highly* secure, and what I do. See the final part of this readme for details.
 
-Press **e** to toggle between edit and present, **f** to go full screen, and **s** to open or focus speaker view.  Autosave keeps a
+Press **e** to toggle between edit and present, **f** to go full screen, and **s** to open or focus speaker view. Presentation remotes can advance with Right, Down, Page Down, Enter, Space, or Media Next and go back with Left, Up, Page Up, Backspace, or Media Previous; these controls also work while the speaker window has focus. Autosave keeps a
 copy of your current deck; the clock icon restores the most recent deck from a prior session (if different from the one already
 open).  Undo/redo keeps a five-step history of recent edits.  You advance slides with Left/Right arrows, Page Up/Down, Space, Home, and End.
 

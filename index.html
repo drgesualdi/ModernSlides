@@ -1719,6 +1719,13 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
 .theme-color-field input[type="color"] { width:3.2rem; height:2.4rem; padding:.12rem; border:1px solid #aaa; background:#fff; cursor:pointer; }
 .theme-color-intro { margin:-.25rem 0 1rem; color:#555; line-height:1.5; }
 @media (max-width:560px) { .theme-color-grid { grid-template-columns:1fr; } }
+.published-deck-list { display:grid; gap:.65rem; max-height:min(56vh,32rem); overflow:auto; margin:1rem 0; padding-right:.25rem; }
+.published-deck-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.75rem; align-items:center; padding:.8rem; border:1px solid #d7d3ca; background:#faf9f5; }
+.published-deck-title { overflow:hidden; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.published-deck-meta { margin-top:.2rem; color:#666; font:500 .72rem/1.35 var(--ui-mono); }
+.published-deck-empty { padding:1.1rem; border:1px dashed #bbb; color:#666; text-align:center; }
+.published-deck-status { min-height:1.3rem; color:#666; }
+.published-deck-status.error { color:var(--ui-danger); }
 .help-gallery-link { display:inline-flex; align-items:center; gap:.4rem; margin-top:.35rem; padding:.55rem .75rem; border:1px solid #bbb; border-radius:.3rem; background:#faf9f5; color:#222; font-weight:700; text-decoration:none; }
 .help-gallery-link:hover { border-color:#222; background:#fff; }
 
@@ -1973,6 +1980,7 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
       <button id="help-button" type="button" title="Help" aria-label="Help"><i class="fa-solid fa-question"></i></button>
       <button id="new-deck" type="button" title="New deck" aria-label="New deck"><i class="fa-solid fa-file-circle-plus"></i></button>
       <button id="load-deck" type="button" title="Load JSON, Markdown, or old text deck" aria-label="Load deck"><i class="fa-solid fa-folder-open"></i></button>
+      <button id="open-published" type="button" title="Open a published deck (instructor)" aria-label="Open published decks"><i class="fa-solid fa-folder-tree"></i></button>
       <button id="restore-deck" type="button" title="Restore previous deck" aria-label="Restore previous deck" disabled><i class="fa-solid fa-clock-rotate-left"></i></button>
       <button id="manage-assets" type="button" title="Manage pasted images" aria-label="Manage images"><i class="fa-solid fa-images"></i></button>
       <button id="view-json" type="button" title="View canonical JSON" aria-label="View JSON"><i class="fa-solid fa-code"></i></button>
@@ -2179,6 +2187,19 @@ Code(python): labels the code block as Python.</pre>
   </div>
 </div>
 
+<div id="published-decks-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="published-decks-title">
+  <div class="modal-card wide">
+    <h2 id="published-decks-title">Published decks</h2>
+    <p>Instructor access is required. Choose a deck to load it and enter presentation view.</p>
+    <div id="published-decks-status" class="published-deck-status" role="status"></div>
+    <div id="published-decks-list" class="published-deck-list"></div>
+    <div class="modal-actions">
+      <button id="refresh-published" type="button">Refresh</button>
+      <button type="button" data-close-modal="published-decks-modal">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="theme-colors-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="theme-colors-title">
   <div class="modal-card">
     <h2 id="theme-colors-title">Theme colors</h2>
@@ -2210,6 +2231,7 @@ const FORMAT = 'modernslides';
 const VERSION = 2;
 const PUBLISH_LOGIN_URL = './api/login.php';
 const PUBLISH_URL = './api/publish.php';
+const PUBLISHED_LIST_URL = './api/decks.php';
 const STAGE_W = 1600;
 const STAGE_H = 900;
 const STORAGE_CURRENT = 'modernslides.v2.current';
@@ -5438,6 +5460,96 @@ function authorizePublishing() {
   });
 }
 
+function setPublishedDeckStatus(message = '', error = false) {
+  const target = $('published-decks-status');
+  target.textContent = message;
+  target.classList.toggle('error', error);
+}
+
+function publishedDeckDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
+}
+
+function renderPublishedDecks(decks) {
+  const list = $('published-decks-list');
+  list.replaceChildren();
+  if (!decks.length) {
+    const empty = document.createElement('div');
+    empty.className = 'published-deck-empty';
+    empty.textContent = 'No published decks were found.';
+    list.appendChild(empty);
+    return;
+  }
+  decks.forEach(deck => {
+    const row = document.createElement('div');
+    row.className = 'published-deck-row';
+    const details = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'published-deck-title';
+    title.textContent = deck.title || deck.name;
+    const meta = document.createElement('div');
+    meta.className = 'published-deck-meta';
+    const updated = publishedDeckDate(deck.updated);
+    meta.textContent = [deck.name, `${Number(deck.slides) || 0} slides`, updated].filter(Boolean).join(' · ');
+    details.append(title, meta);
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.textContent = 'Open & present';
+    open.addEventListener('click', async () => {
+      open.disabled = true;
+      setPublishedDeckStatus(`Opening ${deck.title || deck.name}…`);
+      try {
+        await loadFromQuery(deck.path || deck.name);
+        const url = new URL(location.href);
+        url.searchParams.set('deck', deck.name);
+        history.replaceState(null, '', url);
+        closeModal('published-decks-modal');
+        toggleEdit(false);
+        setStatus(`Opened published deck: ${deck.title || deck.name}`, 'saved');
+      } catch (error) {
+        console.error('Could not open published deck:', error);
+        setPublishedDeckStatus(error?.message || 'Could not open the published deck.', true);
+        open.disabled = false;
+      }
+    });
+    row.append(details, open);
+    list.appendChild(row);
+  });
+}
+
+async function fetchPublishedDecks() {
+  const response = await fetch(PUBLISHED_LIST_URL, {
+    method:'POST',
+    credentials:'same-origin',
+    cache:'no-store',
+    headers:{'X-ModernSlides-Instructor':'1'}
+  });
+  let result = null;
+  try { result = await response.json(); } catch {}
+  if (response.status === 401) state.publishAuthenticated = false;
+  if (!response.ok) throw new Error(result?.error || `The server returned HTTP ${response.status}.`);
+  return Array.isArray(result?.decks) ? result.decks : [];
+}
+
+async function openPublishedDecks() {
+  openModal('published-decks-modal');
+  $('published-decks-list').replaceChildren();
+  setPublishedDeckStatus('Authorizing instructor access…');
+  try {
+    await authorizePublishing();
+    state.publishAuthenticated = true;
+    setPublishedDeckStatus('Loading published decks…');
+    const decks = await fetchPublishedDecks();
+    renderPublishedDecks(decks);
+    setPublishedDeckStatus(`${decks.length} published ${decks.length === 1 ? 'deck' : 'decks'}`);
+  } catch (error) {
+    console.error('Could not list published decks:', error);
+    setPublishedDeckStatus(error?.message || 'Could not list published decks.', true);
+  }
+}
+
 async function sendPublishedDeck(name) {
   const controller = new AbortController();
 
@@ -6462,6 +6574,8 @@ function setupEvents() {
   $('help-button').addEventListener('click', () => openModal('help-modal'));
   $('new-deck').addEventListener('click', createNewDeck);
   $('load-deck').addEventListener('click', openDeck);
+  $('open-published').addEventListener('click', openPublishedDecks);
+  $('refresh-published').addEventListener('click', openPublishedDecks);
   $('restore-deck').addEventListener('click', restorePreviousDeck);
   $('manage-assets').addEventListener('click', showAssetManager);
   $('view-json').addEventListener('click', () => {

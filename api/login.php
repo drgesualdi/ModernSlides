@@ -119,7 +119,7 @@ if (
             );
 
             $error =
-                'Incorrect publishing key.';
+                'Incorrect instructor key.';
         }
     }
 }
@@ -169,7 +169,7 @@ $csrfValue =
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ModernSlides Publish</title>
+<title>ModernSlides Instructor Access</title>
 
 <style nonce="<?= htmlspecialchars($nonce, ENT_QUOTES, 'UTF-8') ?>">
 * {
@@ -284,10 +284,10 @@ a {
 
 <?php if ($authenticated): ?>
 
-    <h1>Authorized</h1>
+    <h1>Instructor access authorized</h1>
 
     <p>
-        ModernSlides is authorized to publish.
+        ModernSlides instructor tools are authorized.
         This window will close automatically.
     </p>
 
@@ -307,10 +307,10 @@ a {
 
 <?php else: ?>
 
-    <h1>Authorize Publish</h1>
+    <h1>Instructor access</h1>
 
     <p>
-        Enter the publishing key for this website.
+        Enter the instructor key for this website.
         The key is not stored in the presentation.
     </p>
 
@@ -328,7 +328,7 @@ a {
         >
 
         <label for="key">
-            Publishing key
+            Instructor key
         </label>
 
         <input

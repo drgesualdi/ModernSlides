@@ -181,7 +181,7 @@ ModernSlides can optionally publish the current deck directly to the website fro
 
 ### First-time Publish setup
 
-If this is your first time using Publish, read this entire section before enabling it. Create a subfolder named `ModernSlides` in your website file structure and put `index.html` and `style-gallery.html` files there.  We now need to upload six helper files, one of which we need to modify three lines on. That's it!
+If this is your first time using Publish, read this entire section before enabling it. Create a subfolder named `ModernSlides` in your website file structure and put `index.html` and `style-gallery.html` files there. We now need to upload the small set of site and helper files below, one of which needs three settings changed. That's it!
 
 A typical HostGator installation may look like:
 
@@ -203,6 +203,7 @@ A typical HostGator installation may look like:
                 +-- api/ (YOU WILL NEED TO CREATE THIS SUBFOLDER AND UPLOAD THIS)
                     +-- .htaccess
                     +-- _bootstrap.php
+                    +-- decks.php
                     +-- login.php
                     +-- publish.php
 
@@ -252,7 +253,7 @@ If your hosting control panel permits it, set the secret configuration file's pe
 
 STEP 2:
 
-Inside your public folder, create a subfolder called ModernSlides, and a subfolder in that called api. Upload the following seven files.  Note that there are two .htaccess files in this Github. One stays in the api folder, the other doesn't.
+Inside your public folder, create a subfolder called ModernSlides, and a subfolder in that called api. Upload the following files. Note that there are two .htaccess files in this Github. One stays in the api folder, the other doesn't.
 
     ModernSlides/
         index.html
@@ -262,6 +263,7 @@ Inside your public folder, create a subfolder called ModernSlides, and a subfold
         api/
             .htaccess
             _bootstrap.php
+            decks.php
             login.php
             publish.php
 
@@ -280,6 +282,8 @@ The deck can then be opened with:
     https://www.yourdomain.com/ModernSlides/index.html?deck=Econ101
 
 The first time in a browser session that you try to publish, an authorization window will open asking for the password you set above. THIS IS NEVER SAVED OUTSIDE YOUR BROWSER. Pasted and dropped images need no separate upload - the whole deck is uploaded at once. You can then continue editing that same deck and can publish again, from any computer, with the publish button and your password. You MUST be at https://www.yourwebsite.com/ModernSlides/... when you are editing or the upload won't work.
+
+The folder-tree button beside Open is **Open published decks**. It asks for the same instructor key, securely lists decks previously created by ModernSlides Publish, and offers **Open & present** for each one. This makes it possible to switch to a deck from another class while presenting without remembering its URL. Only folders managed by the Publish feature appear in this list.
 
 SECURITY NOTES.
 

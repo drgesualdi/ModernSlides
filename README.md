@@ -43,7 +43,7 @@ These notes appear in speaker view and when printing with notes.
 :::
 ```
 
-Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, and `page-numbers`. Slide notes use `:::notes`; the same notes appear in speaker view and when printing with notes. Older files containing `:::speaker-notes` or `:::print-notes` are imported and merged automatically.
+Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, `page-numbers`, and `theme-colors`. The color field is written automatically by **Export Markdown** when a theme palette has been customized. Slide notes use `:::notes`; the same notes appear in speaker view and when printing with notes. Older files containing `:::speaker-notes` or `:::print-notes` are imported and merged automatically.
 
 A standalone YouTube watch, shortened, Shorts, Live, or embed URL becomes a playable embedded-video slide block. A normal Markdown link works too, as long as it is alone on its line:
 
@@ -65,6 +65,12 @@ Slide-level settings can be added as HTML comments and remain invisible in the r
 Valid layouts are `auto`, `top`, `center`, `statement`, `data`, and `full`. Relative image paths are resolved from the location of the Markdown file when it is loaded from a URL.
 
 After editing, use the **Export Markdown** button (the document icon beside View JSON) to download the complete deck as an editable `.md` file. That file can be revised in any text editor and opened in ModernSlides again. Standard Markdown content, deck metadata, slide divisions, layouts, backgrounds, hidden slides, and notes round-trip through the export. Advanced ModernSlides-only formatting is converted to readable Markdown where possible: columns are flattened into labeled sections, embedded websites become links, and exact text/image sizing or reveal timing may need to be restored in the slide editor after re-importing.
+
+## Customize the editor and theme colors
+
+In Edit mode, select a theme and click the palette button beside the theme menu. You can change its background, text, accent, secondary, and line colors. Each theme keeps its own custom palette, and those colors are stored in the deck so they also appear in saved, exported, and published copies. Use **Reset theme** to return only the active theme to its original colors.
+
+Drag the narrow divider beside the slide thumbnails to make the thumbnail rail wider or narrower. Double-click the divider (or focus it and press Home) to restore the default width. This editor preference is remembered in that browser; it does not change the presentation itself.
 
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  

@@ -1358,10 +1358,11 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 
 /* ---------- Editor ---------- */
 #editor-view {
+  --thumb-rail-width: 240px;
   position: fixed;
   inset: 0;
   display: none;
-  grid-template-columns: 240px minmax(0,1fr);
+  grid-template-columns: var(--thumb-rail-width) 7px minmax(0,1fr);
   background: var(--ui-bg);
   color: var(--ui-text);
   z-index: 50;
@@ -1377,6 +1378,28 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
   background: #ebe8e0;
   scrollbar-gutter: stable;
 }
+#thumb-resizer {
+  position: relative;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+  background: #d7d3ca;
+  border-left: 1px solid #c9c4ba;
+  border-right: 1px solid #c9c4ba;
+}
+#thumb-resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 3rem;
+  border-left: 1px solid #8e8a82;
+  border-right: 1px solid #8e8a82;
+  transform: translate(-50%,-50%);
+}
+body.resizing-thumbs,
+body.resizing-thumbs * { cursor: col-resize !important; user-select: none !important; }
 #thumb-list {
   display: flex;
   flex-direction: column;
@@ -1385,7 +1408,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 }
 .thumb {
   position: relative;
-  width: 192px;
+  width: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1407,8 +1430,8 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 }
 .thumb-canvas {
   position: relative;
-  width: 192px;
-  height: 108px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid #c9c4ba;
   border-radius: 0;
@@ -1419,7 +1442,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
   outline: 3px solid var(--ui-accent);
   outline-offset: 2px;
 }
-.thumb-canvas .slide-frame { transform: scale(.12); pointer-events: none; }
+.thumb-canvas .slide-frame { pointer-events: none; }
 .thumb-number {
   position: absolute;
   z-index: 20;
@@ -1662,7 +1685,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 
 @media (max-width: 720px) {
   #editor-view { grid-template-columns: 1fr; }
-  #thumb-rail { display: none; }
+  #thumb-rail, #thumb-resizer { display: none; }
   #toolbar { padding-bottom: .7rem; }
 }
 
@@ -1689,6 +1712,13 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 .settings-grid label { color:#555; font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .settings-grid input { width:100%; min-width:0; padding:.62rem .7rem; border:1px solid #c9c4ba; border-radius:.28rem; background:#fff; color:#222; }
 .settings-grid input:focus { outline:2px solid #222; outline-offset:1px; border-color:#222; }
+.theme-color-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem 1rem; }
+.theme-color-field { display:grid; grid-template-columns:minmax(0,1fr) 3.2rem; align-items:center; gap:.7rem; padding:.65rem; border:1px solid #ddd; background:#faf9f5; }
+.theme-color-field label { display:grid; gap:.18rem; font-weight:700; }
+.theme-color-field small { color:#666; font-weight:400; }
+.theme-color-field input[type="color"] { width:3.2rem; height:2.4rem; padding:.12rem; border:1px solid #aaa; background:#fff; cursor:pointer; }
+.theme-color-intro { margin:-.25rem 0 1rem; color:#555; line-height:1.5; }
+@media (max-width:560px) { .theme-color-grid { grid-template-columns:1fr; } }
 .help-gallery-link { display:inline-flex; align-items:center; gap:.4rem; margin-top:.35rem; padding:.55rem .75rem; border:1px solid #bbb; border-radius:.3rem; background:#faf9f5; color:#222; font-weight:700; text-decoration:none; }
 .help-gallery-link:hover { border-color:#222; background:#fff; }
 
@@ -1891,6 +1921,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
 
 <div id="editor-view" aria-label="Slide editor">
   <aside id="thumb-rail"><div id="thumb-list"></div></aside>
+  <div id="thumb-resizer" role="separator" aria-orientation="vertical" aria-label="Resize slide thumbnails" tabindex="0" title="Drag to resize thumbnails; double-click to reset"></div>
   <main id="editor-main">
     <div id="workspace">
       <section id="author-pane">
@@ -1932,6 +1963,7 @@ body.edit-mode #presentation-view { visibility: hidden; pointer-events: none; }
       </span>
       <label class="sr-only" for="theme-select">Theme</label>
       <select id="theme-select" title="Theme" aria-label="Theme"></select>
+      <button id="theme-colors" type="button" title="Customize theme colors" aria-label="Customize theme colors"><i class="fa-solid fa-palette"></i></button>
       <span class="toolbar-group">
         <button id="undo" type="button" title="Undo" aria-label="Undo" disabled><i class="fa-solid fa-rotate-left"></i></button>
         <button id="redo" type="button" title="Redo" aria-label="Redo" disabled><i class="fa-solid fa-rotate-right"></i></button>
@@ -2147,6 +2179,25 @@ Code(python): labels the code block as Python.</pre>
   </div>
 </div>
 
+<div id="theme-colors-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="theme-colors-title">
+  <div class="modal-card">
+    <h2 id="theme-colors-title">Theme colors</h2>
+    <p class="theme-color-intro">Customize the core palette for <strong id="theme-colors-name"></strong>. These colors are saved with the deck and included when it is published.</p>
+    <div class="theme-color-grid">
+      <div class="theme-color-field"><label for="theme-color-bg">Background<small>Slide canvas</small></label><input id="theme-color-bg" type="color"></div>
+      <div class="theme-color-field"><label for="theme-color-text">Text<small>Primary copy</small></label><input id="theme-color-text" type="color"></div>
+      <div class="theme-color-field"><label for="theme-color-accent">Accent<small>Primary emphasis</small></label><input id="theme-color-accent" type="color"></div>
+      <div class="theme-color-field"><label for="theme-color-accent2">Secondary<small>Supporting emphasis</small></label><input id="theme-color-accent2" type="color"></div>
+      <div class="theme-color-field"><label for="theme-color-line">Lines<small>Rules and borders</small></label><input id="theme-color-line" type="color"></div>
+    </div>
+    <div class="modal-actions">
+      <button id="reset-theme-colors" type="button">Reset theme</button>
+      <button type="button" data-close-modal="theme-colors-modal">Cancel</button>
+      <button id="save-theme-colors" type="button">Save colors</button>
+    </div>
+  </div>
+</div>
+
 <input id="file-input" type="file" class="hidden" accept=".json,.txt,.md,.markdown,application/json,text/plain,text/markdown">
 <div id="render-bank" aria-hidden="true"></div>
 <div id="print-root"></div>
@@ -2166,6 +2217,7 @@ const STORAGE_PREVIOUS = 'modernslides.v2.previous';
 const STORAGE_CURRENT_NAME = 'modernslides.v2.currentName';
 const STORAGE_PREVIOUS_NAME = 'modernslides.v2.previousName';
 const STORAGE_SLIDE = 'modernslides.v2.slideId';
+const STORAGE_THUMB_WIDTH = 'modernslides.ui.thumbRailWidth';
 const MAX_HISTORY = 60;
 const THEME_IDS = [
   ['tufte', "Tufte"],
@@ -2220,6 +2272,13 @@ const LAYOUTS = new Set(['auto', 'top', 'center', 'statement', 'data', 'full']);
 const BLOCK_TYPES = new Set(['title', 'text', 'list', 'quote', 'image', 'break', 'rule', 'website', 'code', 'columns', 'table']);
 const DIRECTIVES = new Set(['title','header','bigtext','text','smalltext','tinytext','quote','image','break','rule','website','code','aside','background','columns','table']);
 const TOP_LEVEL_FIELDS = new Set(['header','aside','background']);
+const THEME_COLOR_FIELDS = [
+  ['bg', '--bg', 'Background'],
+  ['text', '--text', 'Text'],
+  ['accent', '--accent', 'Accent'],
+  ['accent2', '--accent-2', 'Secondary'],
+  ['line', '--line', 'Lines']
+];
 
 const DECK_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -2235,7 +2294,12 @@ const DECK_SCHEMA = {
       type:'object', additionalProperties:false, required:['title','theme','pageNumbers'],
       properties:{
         title:{type:'string'}, theme:{type:'string'}, author:{type:'string'}, date:{type:'string'},
-        footer:{type:'string'}, pageNumbers:{type:'boolean'}, logo:{type:['string','null']}
+        footer:{type:'string'}, pageNumbers:{type:'boolean'}, logo:{type:['string','null']},
+        themeColors:{type:'object',additionalProperties:{type:'object',additionalProperties:false,properties:{
+          bg:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'}, text:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'},
+          accent:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'}, accent2:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'},
+          line:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'}
+        }}}
       }
     },
     assets:{type:'object', additionalProperties:{$ref:'#/$defs/asset'}},
@@ -2305,7 +2369,18 @@ function validateDeckInput(deck) {
   collectUnknownKeys(deck, new Set(['format','version','meta','assets','slides']), 'deck', errors);
   if (deck?.format !== FORMAT) errors.push(`deck.format must be "${FORMAT}".`);
   if (Number(deck?.version) !== VERSION) errors.push(`deck.version must be ${VERSION}.`);
-  collectUnknownKeys(deck?.meta, new Set(['title','theme','author','date','footer','pageNumbers','logo']), 'deck.meta', errors);
+  collectUnknownKeys(deck?.meta, new Set(['title','theme','author','date','footer','pageNumbers','logo','themeColors']), 'deck.meta', errors);
+  if (deck?.meta?.themeColors != null) {
+    if (typeof deck.meta.themeColors !== 'object' || Array.isArray(deck.meta.themeColors)) errors.push('deck.meta.themeColors must be an object.');
+    else Object.entries(deck.meta.themeColors).forEach(([theme,palette]) => {
+      const path = `deck.meta.themeColors.${theme}`;
+      if (!THEME_IDS.some(([id]) => id === theme)) errors.push(`${path} is not a recognized theme.`);
+      collectUnknownKeys(palette, new Set(THEME_COLOR_FIELDS.map(([key]) => key)), path, errors);
+      Object.entries(palette || {}).forEach(([key,value]) => {
+        if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) errors.push(`${path}.${key} must be a six-digit hex color.`);
+      });
+    });
+  }
   if (deck?.assets != null && (typeof deck.assets !== 'object' || Array.isArray(deck.assets))) errors.push('deck.assets must be an object.');
   else Object.entries(deck?.assets || {}).forEach(([id,asset]) => collectUnknownKeys(asset, new Set(['name','type','data']), `deck.assets.${id}`, errors));
   if (!Array.isArray(deck?.slides) || !deck.slides.length) errors.push('deck.slides must be a non-empty array.');
@@ -2400,7 +2475,27 @@ function nextSlideId(deck) {
   return `slide${max + 1}`;
 }
 function defaultMeta(title = 'New Presentation') {
-  return { title, theme: 'bauhaus', author: '', date: '', footer: '', pageNumbers: true, logo: null };
+  return { title, theme: 'bauhaus', author: '', date: '', footer: '', pageNumbers: true, logo: null, themeColors: {} };
+}
+function normalizeHexColor(value) {
+  const source = String(value ?? '').trim();
+  const short = source.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (short) return `#${short.slice(1).map(part => part + part).join('')}`.toLowerCase();
+  return /^#[0-9a-f]{6}$/i.test(source) ? source.toLowerCase() : null;
+}
+function normalizeThemeColors(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const output = {};
+  Object.entries(input).forEach(([theme,palette]) => {
+    if (!THEME_IDS.some(([id]) => id === theme) || !palette || typeof palette !== 'object' || Array.isArray(palette)) return;
+    const normalized = {};
+    THEME_COLOR_FIELDS.forEach(([key]) => {
+      const color = normalizeHexColor(palette[key]);
+      if (color) normalized[key] = color;
+    });
+    if (Object.keys(normalized).length) output[theme] = normalized;
+  });
+  return output;
 }
 function mergeSlideNotes(speaker, print) {
   const speakerText = String(speaker ?? '').trim();
@@ -2463,7 +2558,8 @@ const state = {
   lastAutosaveOk: true,
   autosaveChain: Promise.resolve(),
   fileHandle: null,
-  publishAuthenticated: false
+  publishAuthenticated: false,
+  thumbResizeObserver: null
 };
 
 function normalizeBlock(block) {
@@ -2566,6 +2662,7 @@ function normalizeDeck(input) {
   deck.meta.footer = String(deck.meta.footer ?? '');
   deck.meta.pageNumbers = deck.meta.pageNumbers !== false;
   deck.meta.logo = deck.meta.logo ? String(deck.meta.logo) : null;
+  deck.meta.themeColors = normalizeThemeColors(deck.meta.themeColors);
   const used = new Set();
 
   /* First reserve every valid ID that already exists.
@@ -3802,6 +3899,11 @@ function frameNumberInfo(slide) {
 function buildCanonicalFrame(slide, doc = document) {
   const frame = doc.createElement('article');
   frame.className = `slide-frame theme-${state.deck.meta.theme} layout-${inferredLayout(slide)}`;
+  const palette = state.deck.meta.themeColors?.[state.deck.meta.theme] || {};
+  THEME_COLOR_FIELDS.forEach(([key, property]) => {
+    const color = normalizeHexColor(palette[key]);
+    if (color) frame.style.setProperty(property, color);
+  });
   frame.dataset.slideId = slide.id;
   frame.dataset.steps = String(slide.steps || 0);
   if (slide.hidden) frame.dataset.hidden = 'true';
@@ -3988,6 +4090,9 @@ function fitFrameInSlot(slot, frame = slot?.querySelector('.slide-frame')) {
   frame.style.left = `${(width - STAGE_W * scale) / 2}px`;
   frame.style.top = `${(height - STAGE_H * scale) / 2}px`;
 }
+function fitThumbnailFrames(root = $('thumb-list')) {
+  requestAnimationFrame(() => root?.querySelectorAll?.('.thumb-canvas').forEach(canvas => fitFrameInSlot(canvas)));
+}
 function mountFrame(slot, id, step, {showOverflow = false, liveWebsites = false} = {}) {
   slot.replaceChildren();
   const frame = cloneFrame(id, step);
@@ -4123,6 +4228,7 @@ function refreshThumbnail(id) {
   const index = state.deck.slides.findIndex(item => item.id === id);
   const replacement = buildThumbnailElement(slide, index);
   if (current) current.replaceWith(replacement); else list.appendChild(replacement);
+  fitThumbnailFrames(replacement);
 }
 function scrollSelectedThumbnail() {
   requestAnimationFrame(() => $('thumb-list').querySelector('.thumb.selected')?.scrollIntoView({block:'center', inline:'nearest'}));
@@ -4131,6 +4237,7 @@ function refreshThumbnails({scrollSelected = false} = {}) {
   const list = $('thumb-list');
   const oldScrollTop = list.parentElement?.scrollTop ?? 0;
   list.replaceChildren(...state.deck.slides.map((slide,index) => buildThumbnailElement(slide,index)));
+  fitThumbnailFrames(list);
   if (scrollSelected) scrollSelectedThumbnail();
   else if (list.parentElement) list.parentElement.scrollTop = oldScrollTop;
 }
@@ -4141,6 +4248,58 @@ function updateToolbarState() {
   $('toggle-page-numbers').style.opacity = state.deck.meta.pageNumbers ? '1' : '.38';
   $('toggle-hidden').innerHTML = slide?.hidden ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
   updateHistoryButtons();
+}
+
+function thumbRailLimits() {
+  return {min:180, max:Math.max(180, Math.min(720, Math.floor(innerWidth * .55)))};
+}
+function setThumbRailWidth(value, {persist = true} = {}) {
+  const limits = thumbRailLimits();
+  const width = Math.round(Math.max(limits.min, Math.min(limits.max, Number(value) || 240)));
+  $('editor-view').style.setProperty('--thumb-rail-width', `${width}px`);
+  const handle = $('thumb-resizer');
+  handle.setAttribute('aria-valuemin', String(limits.min));
+  handle.setAttribute('aria-valuemax', String(limits.max));
+  handle.setAttribute('aria-valuenow', String(width));
+  if (persist) storageSet(STORAGE_THUMB_WIDTH, width);
+  fitThumbnailFrames();
+  return width;
+}
+function setupThumbRailResize() {
+  const handle = $('thumb-resizer');
+  setThumbRailWidth(Number(storageGet(STORAGE_THUMB_WIDTH)) || 240, {persist:false});
+  handle.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    handle.setPointerCapture?.(event.pointerId);
+    document.body.classList.add('resizing-thumbs');
+    setThumbRailWidth(event.clientX, {persist:false});
+  });
+  handle.addEventListener('pointermove', event => {
+    if (!handle.hasPointerCapture?.(event.pointerId)) return;
+    setThumbRailWidth(event.clientX, {persist:false});
+  });
+  const finish = (event, cancelled = false) => {
+    if (!handle.hasPointerCapture?.(event.pointerId)) return;
+    handle.releasePointerCapture?.(event.pointerId);
+    document.body.classList.remove('resizing-thumbs');
+    const current = Number(handle.getAttribute('aria-valuenow')) || 240;
+    setThumbRailWidth(cancelled ? current : event.clientX, {persist:true});
+  };
+  handle.addEventListener('pointerup', finish);
+  handle.addEventListener('pointercancel', event => finish(event, true));
+  handle.addEventListener('dblclick', () => setThumbRailWidth(240));
+  handle.addEventListener('keydown', event => {
+    const current = Number(handle.getAttribute('aria-valuenow')) || 240;
+    if (event.key === 'ArrowLeft') { event.preventDefault(); setThumbRailWidth(current - 20); }
+    else if (event.key === 'ArrowRight') { event.preventDefault(); setThumbRailWidth(current + 20); }
+    else if (event.key === 'Home') { event.preventDefault(); setThumbRailWidth(240); }
+  });
+  if ('ResizeObserver' in window) {
+    state.thumbResizeObserver?.disconnect?.();
+    state.thumbResizeObserver = new ResizeObserver(() => fitThumbnailFrames());
+    state.thumbResizeObserver.observe($('thumb-rail'));
+  }
 }
 
 
@@ -4864,6 +5023,10 @@ function importMarkdownDeck(text, filename = 'presentation.md') {
   if (attributes.footer != null) meta.footer = String(attributes.footer);
   if (attributes.logo != null) meta.logo = String(attributes.logo) || null;
   if (attributes.pagenumbers != null) meta.pageNumbers = attributes.pagenumbers !== false;
+  if (attributes.themecolors != null) {
+    try { meta.themeColors = normalizeThemeColors(JSON.parse(String(attributes.themecolors))); }
+    catch { meta.themeColors = {}; }
+  }
   const deck = {format:FORMAT, version:VERSION, meta, assets:{}, slides:[]};
   splitMarkdownSlides(body).forEach((slideText, index) => deck.slides.push(markdownSlideFromText(slideText, index, deck)));
   if (!attributes.title && deck.slides[0]) {
@@ -4957,6 +5120,7 @@ function deckToMarkdown(deck = state.deck) {
     `footer: ${markdownFrontMatterValue(meta.footer)}`,
     `page-numbers: ${markdownFrontMatterValue(meta.pageNumbers !== false)}`,
     ...(meta.logo ? [`logo: ${markdownFrontMatterValue(meta.logo)}`] : []),
+    ...(Object.keys(meta.themeColors || {}).length ? [`theme-colors: ${markdownFrontMatterValue(JSON.stringify(normalizeThemeColors(meta.themeColors)))}`] : []),
     '---'
   ];
   const slides = (deck?.slides || []).map(slideToMarkdown).filter(Boolean);
@@ -4967,7 +5131,7 @@ function runMarkdownRoundTripSelfTest() {
     const source = normalizeDeck({
       format:FORMAT,
       version:VERSION,
-      meta:{...defaultMeta('Markdown "Round Trip"'), theme:'bauhaus', author:'Test Author', footer:'Test Footer', pageNumbers:false},
+      meta:{...defaultMeta('Markdown "Round Trip"'), theme:'bauhaus', author:'Test Author', footer:'Test Footer', pageNumbers:false, themeColors:{bauhaus:{bg:'#112233',text:'#fefefe',accent:'#ff4400',accent2:'#2255aa',line:'#778899'}}},
       assets:{},
       slides:[
         {
@@ -5002,6 +5166,7 @@ function runMarkdownRoundTripSelfTest() {
       imported.meta.title === source.meta.title,
       imported.meta.theme === source.meta.theme,
       imported.meta.pageNumbers === false,
+      imported.meta.themeColors?.bauhaus?.accent === '#ff4400',
       imported.slides.length === 2,
       imported.slides[0].layout === 'statement',
       imported.slides[0].background?.mode === 'full',
@@ -6193,6 +6358,58 @@ function openSettings() {
   $('setting-logo').value = state.deck.meta.logo || '';
   openModal('settings-modal');
 }
+function cssColorToHex(value, fallback = '#000000') {
+  const hex = normalizeHexColor(value);
+  if (hex) return hex;
+  const match = String(value ?? '').match(/rgba?\(\s*(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)/i);
+  if (!match) return fallback;
+  return `#${match.slice(1,4).map(part => Math.max(0, Math.min(255, Math.round(Number(part)))).toString(16).padStart(2,'0')).join('')}`;
+}
+function themeDefaultPalette(theme = state.deck.meta.theme) {
+  const probe = document.createElement('article');
+  probe.className = `slide-frame theme-${theme}`;
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;left:-10000px;top:-10000px';
+  document.body.appendChild(probe);
+  const computed = getComputedStyle(probe);
+  const palette = {};
+  THEME_COLOR_FIELDS.forEach(([key,property]) => { palette[key] = cssColorToHex(computed.getPropertyValue(property)); });
+  probe.remove();
+  return palette;
+}
+function openThemeColors() {
+  if (state.editMode) commitEditor({record:true});
+  const theme = state.deck.meta.theme;
+  const defaults = themeDefaultPalette(theme);
+  const saved = state.deck.meta.themeColors?.[theme] || {};
+  $('theme-colors-name').textContent = THEME_IDS.find(([id]) => id === theme)?.[1] || theme;
+  THEME_COLOR_FIELDS.forEach(([key]) => { $(`theme-color-${key}`).value = normalizeHexColor(saved[key]) || defaults[key]; });
+  openModal('theme-colors-modal');
+}
+function saveThemeColors() {
+  const theme = state.deck.meta.theme;
+  const palette = {};
+  THEME_COLOR_FIELDS.forEach(([key]) => { palette[key] = normalizeHexColor($(`theme-color-${key}`).value) || '#000000'; });
+  const next = normalizeThemeColors({...state.deck.meta.themeColors, [theme]:palette});
+  if (JSON.stringify(next) !== JSON.stringify(state.deck.meta.themeColors || {})) {
+    pushUndo();
+    state.deck.meta.themeColors = next;
+    autosave();
+    scheduleRender('theme-colors');
+  }
+  closeModal('theme-colors-modal');
+}
+function resetThemeColors() {
+  const theme = state.deck.meta.theme;
+  if (state.deck.meta.themeColors?.[theme]) {
+    pushUndo();
+    const next = {...state.deck.meta.themeColors};
+    delete next[theme];
+    state.deck.meta.themeColors = next;
+    autosave();
+    scheduleRender('theme-colors-reset');
+  }
+  closeModal('theme-colors-modal');
+}
 function saveSettings() {
   if (state.editMode) commitEditor({record:true});
   const nextMeta = {
@@ -6236,6 +6453,9 @@ function setupEvents() {
   $('undo').addEventListener('click', undo);
   $('redo').addEventListener('click', redo);
   $('theme-select').addEventListener('change', event => setTheme(event.target.value));
+  $('theme-colors').addEventListener('click', openThemeColors);
+  $('save-theme-colors').addEventListener('click', saveThemeColors);
+  $('reset-theme-colors').addEventListener('click', resetThemeColors);
   $('toggle-page-numbers').addEventListener('click', togglePageNumbers);
   $('deck-settings').addEventListener('click', openSettings);
   $('save-settings').addEventListener('click', saveSettings);
@@ -6500,6 +6720,7 @@ function setupEvents() {
 
   window.addEventListener('resize', () => {
     fitFrameInSlot($('presentation-slot'));
+    setThumbRailWidth(Number($('thumb-resizer').getAttribute('aria-valuenow')) || 240, {persist:false});
   });
   document.addEventListener('fullscreenchange', () => {
     if (!state.editMode) $('presentation-view').focus({preventScroll:true});
@@ -6518,6 +6739,7 @@ function populateThemes() {
 
 async function initialize() {
   populateThemes();
+  setupThumbRailResize();
   setupEvents();
   const selfTest = runRoundTripSelfTest();
   if (!selfTest.ok) console.error('ModernSlides round-trip self-test failed', selfTest);

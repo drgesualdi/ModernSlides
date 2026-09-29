@@ -45,6 +45,8 @@ These notes appear in speaker view and when printing with notes.
 
 Optional front matter fields are `title`, `theme`, `author`, `date`, `footer`, `logo`, `page-numbers`, and `theme-colors`. The color field is written automatically by **Export Markdown** when a theme palette has been customized. Slide notes use `:::notes`; the same notes appear in speaker view and when printing with notes. Older files containing `:::speaker-notes` or `:::print-notes` are imported and merged automatically.
 
+**Print with notes** uses portrait pages: the slide remains in its 16:9 shape at the top, while the notes occupy the larger area below it. Note text automatically shrinks to keep the slide and notes together whenever practical. Exceptionally long notes continue on a following portrait notes page instead of being clipped. Ordinary **Print slides** output remains landscape.
+
 A standalone YouTube watch, shortened, Shorts, Live, or embed URL becomes a playable embedded-video slide block. A normal Markdown link works too, as long as it is alone on its line:
 
 ```markdown

@@ -1849,56 +1849,91 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
   visibility: hidden;
   pointer-events: none;
 }
+#print-root.print-preparing.print-with-notes { width: 8.5in; }
 .print-page {
   position: relative;
-  width: 11in;
-  height: 8.5in;
   overflow: hidden;
   page-break-after: always;
   break-after: page;
   background: #fff;
 }
 .print-page:last-child { page-break-after: auto; break-after: auto; }
-.print-page.no-notes { display: grid; place-items: center; }
-.print-page.with-notes { display: flex; flex-direction: column; }
+.print-page.no-notes { display:grid; place-items:center; width:11in; height:8.5in; }
+.print-page.with-notes {
+  display:flex;
+  flex-direction:column;
+  gap:.12in;
+  width:8.5in;
+  height:11in;
+  padding:.25in .25in .2in;
+}
 .print-slide-box {
   position: relative;
   flex: 0 0 auto;
-  width: 11in;
-  height: 6.1875in;
   overflow: hidden;
   contain: strict;
   background: #000;
 }
+.print-page.no-notes .print-slide-box { width:11in; height:6.1875in; }
+.print-page.with-notes .print-slide-box { width:8in; height:4.5in; }
 /* Chrome/Edge can auto-shrink a printed page based on a transformed element's
    unscaled 1600px layout box. zoom changes the layout box itself, so the
-   canonical 1600x900 frame occupies exactly 11in x 6.1875in on paper. */
+   canonical 1600x900 frame occupies an exact physical size on paper. */
 .print-slide-box .slide-frame {
   position: absolute !important;
   left: 0 !important;
   top: 0 !important;
   transform: none !important;
   transform-origin: top left !important;
-  zoom: 66%;
   box-shadow: none !important;
 }
+.print-page.no-notes .print-slide-box .slide-frame { zoom:66%; }
+.print-page.with-notes .print-slide-box .slide-frame { zoom:48%; }
 @supports not (zoom: 1) {
-  .print-slide-box .slide-frame {
+  .print-page.no-notes .print-slide-box .slide-frame {
     transform: scale(.66) !important;
+    transform-origin: top left !important;
+  }
+  .print-page.with-notes .print-slide-box .slide-frame {
+    transform: scale(.48) !important;
     transform-origin: top left !important;
   }
 }
 .print-notes {
   flex: 1 1 auto;
-  width: 11in;
+  width: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: .12in .28in .14in;
+  padding: .06in .12in .08in;
   background: #fff;
   color: #181818;
-  font: 20px/1.36 Lato, Arial, sans-serif;
+  font: 20px/1.34 Lato, Arial, sans-serif;
 }
 .print-notes p { margin: .15em 0 .48em; }
+.print-page.notes-overflow {
+  width:8.5in;
+  min-height:11in;
+  height:auto;
+  overflow:visible;
+  padding:.5in .6in;
+}
+.print-overflow-heading {
+  margin:0 0 .22in;
+  padding-bottom:.12in;
+  border-bottom:1px solid #aaa;
+  color:#555;
+  font:700 12px/1.3 Inter,Arial,sans-serif;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.print-page.notes-overflow .print-notes {
+  width:auto;
+  min-height:0;
+  overflow:visible;
+  padding:0;
+  font-size:14px;
+  line-height:1.38;
+}
 @media print {
   @page { size: 11in 8.5in; margin: 0; }
   html, body {
@@ -4606,23 +4641,98 @@ function syncSpeaker({preserveLive = false} = {}) {
 }
 
 /* ---------- Print ---------- */
-function fitPrintNotes(root) {
-  root.querySelectorAll('.print-notes').forEach(notes => {
-    let size = 22;
+function setPrintOrientation(withNotes) {
+  let style = $('print-page-orientation');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'print-page-orientation';
+    document.head.appendChild(style);
+  }
+  style.textContent = `@page { size: ${withNotes ? '8.5in 11in' : '11in 8.5in'}; margin: 0; }`;
+}
+function printNoteParts(text) {
+  return cleanText(text).split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
+}
+function makePrintNoteParagraph(raw) {
+  const paragraph = document.createElement('p');
+  paragraph.dataset.rawNote = raw;
+  paragraph.innerHTML = inlineMarkup(raw);
+  return paragraph;
+}
+function fillPrintNotes(notes, parts) {
+  notes.replaceChildren(...parts.map(makePrintNoteParagraph));
+}
+function printNotesOverflowing(notes) {
+  return notes.scrollHeight > notes.clientHeight + 1;
+}
+function splitPrintParagraphToFit(notes, paragraph) {
+  const words = String(paragraph.dataset.rawNote || paragraph.textContent || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return null;
+  let low = 1, high = words.length - 1, best = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const prefix = words.slice(0, middle).join(' ');
+    paragraph.dataset.rawNote = prefix;
+    paragraph.innerHTML = inlineMarkup(prefix);
+    if (printNotesOverflowing(notes)) high = middle - 1;
+    else { best = middle; low = middle + 1; }
+  }
+  if (!best) return null;
+  const prefix = words.slice(0, best).join(' ');
+  paragraph.dataset.rawNote = prefix;
+  paragraph.innerHTML = inlineMarkup(prefix);
+  return words.slice(best).join(' ');
+}
+function fitPrintNotes(notes) {
+  let size = 20;
+  notes.style.fontSize = `${size}px`;
+  while (printNotesOverflowing(notes) && size > 11) {
+    size -= 1;
     notes.style.fontSize = `${size}px`;
-    while (notes.scrollHeight > notes.clientHeight + 1 && size > 9) {
-      size -= 1;
-      notes.style.fontSize = `${size}px`;
+  }
+  const overflow = [];
+  let splitPrimary = false;
+  while (printNotesOverflowing(notes) && notes.lastElementChild) {
+    const paragraph = notes.lastElementChild;
+    const raw = paragraph.dataset.rawNote || paragraph.textContent || '';
+    if (notes.childElementCount > 1) {
+      overflow.unshift(raw);
+      paragraph.remove();
+      continue;
     }
-  });
+    const suffix = splitPrintParagraphToFit(notes, paragraph);
+    if (suffix) {
+      overflow.unshift(suffix);
+      splitPrimary = true;
+    } else {
+      overflow.unshift(raw);
+      paragraph.remove();
+    }
+    break;
+  }
+  return {overflow, splitPrimary};
+}
+function createPrintNotesOverflow(slide, parts) {
+  const page = document.createElement('section');
+  page.className = 'print-page notes-overflow';
+  const heading = document.createElement('h2');
+  heading.className = 'print-overflow-heading';
+  heading.textContent = `Notes continued · ${plainTextFromMarkup(state.deck.meta.title)} · Slide ${frameNumberInfo(slide).current}`;
+  const notes = document.createElement('div');
+  notes.className = 'print-notes';
+  fillPrintNotes(notes, parts);
+  page.append(heading, notes);
+  return {page, notes};
 }
 async function preparePrint(withNotes) {
   if (state.editMode) commitEditor({record:true});
   await scheduleRender('print');
   const root = $('print-root');
+  setPrintOrientation(withNotes);
+  root.classList.toggle('print-with-notes', withNotes);
   root.classList.add('print-preparing');
   root.replaceChildren();
-  const noteElements = [];
+  const noteEntries = [];
   visibleSlides().forEach(slide => {
     const page = document.createElement('section');
     page.className = `print-page ${withNotes ? 'with-notes' : 'no-notes'}`;
@@ -4634,15 +4744,24 @@ async function preparePrint(withNotes) {
     if (withNotes) {
       const notes = document.createElement('div');
       notes.className = 'print-notes';
-      notes.innerHTML = noteMarkup(slide.print || '');
+      fillPrintNotes(notes, printNoteParts(slide.print || ''));
       page.appendChild(notes);
-      noteElements.push(notes);
+      noteEntries.push({slide, page, notes});
     }
     root.appendChild(page);
   });
-  for (const notes of noteElements) await typeset(notes);
+  for (const entry of noteEntries) await typeset(entry.notes);
   await waitForAssets(root);
-  fitPrintNotes(root);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  for (const entry of noteEntries) {
+    const fitted = fitPrintNotes(entry.notes);
+    if (!fitted.overflow.length) continue;
+    if (fitted.splitPrimary) await typeset(entry.notes);
+    const continuation = createPrintNotesOverflow(entry.slide, fitted.overflow);
+    entry.page.after(continuation.page);
+    await typeset(continuation.notes);
+  }
+  await waitForAssets(root);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   state.printPrepared = true;
   root.classList.remove('print-preparing');
@@ -4650,8 +4769,9 @@ async function preparePrint(withNotes) {
 }
 function cleanupPrint() {
   if (!state.printPrepared) return;
-  $('print-root').classList.remove('print-preparing');
+  $('print-root').classList.remove('print-preparing', 'print-with-notes');
   $('print-root').replaceChildren();
+  $('print-page-orientation')?.remove();
   state.printPrepared = false;
 }
 

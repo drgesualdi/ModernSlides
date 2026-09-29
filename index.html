@@ -1853,18 +1853,18 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
 .print-page {
   position: relative;
   overflow: hidden;
-  page-break-after: always;
-  break-after: page;
+  page-break-inside: avoid;
+  break-inside: avoid-page;
   background: #fff;
 }
-.print-page:last-child { page-break-after: auto; break-after: auto; }
-.print-page.no-notes { display:grid; place-items:center; width:11in; height:8.5in; }
+.print-page.no-notes { display:grid; place-items:center; width:10.9in; height:8.4in; margin:0 auto; }
 .print-page.with-notes {
   display:flex;
   flex-direction:column;
   gap:.12in;
-  width:8.5in;
-  height:11in;
+  width:8.4in;
+  height:10.9in;
+  margin:0 auto;
   padding:.25in .25in .2in;
 }
 .print-slide-box {
@@ -1874,8 +1874,8 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
   contain: strict;
   background: #000;
 }
-.print-page.no-notes .print-slide-box { width:11in; height:6.1875in; }
-.print-page.with-notes .print-slide-box { width:8in; height:4.5in; }
+.print-page.no-notes .print-slide-box { width:10.9in; height:6.13125in; }
+.print-page.with-notes .print-slide-box { width:7.9in; height:4.44375in; }
 /* Chrome/Edge can auto-shrink a printed page based on a transformed element's
    unscaled 1600px layout box. zoom changes the layout box itself, so the
    canonical 1600x900 frame occupies an exact physical size on paper. */
@@ -1887,15 +1887,15 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
   transform-origin: top left !important;
   box-shadow: none !important;
 }
-.print-page.no-notes .print-slide-box .slide-frame { zoom:66%; }
-.print-page.with-notes .print-slide-box .slide-frame { zoom:48%; }
+.print-page.no-notes .print-slide-box .slide-frame { zoom:65.4%; }
+.print-page.with-notes .print-slide-box .slide-frame { zoom:47.4%; }
 @supports not (zoom: 1) {
   .print-page.no-notes .print-slide-box .slide-frame {
-    transform: scale(.66) !important;
+    transform: scale(.654) !important;
     transform-origin: top left !important;
   }
   .print-page.with-notes .print-slide-box .slide-frame {
-    transform: scale(.48) !important;
+    transform: scale(.474) !important;
     transform-origin: top left !important;
   }
 }
@@ -1911,11 +1911,14 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
 }
 .print-notes p { margin: .15em 0 .48em; }
 .print-page.notes-overflow {
-  width:8.5in;
-  min-height:11in;
+  width:8.4in;
+  min-height:10.9in;
   height:auto;
+  margin:0 auto;
   overflow:visible;
   padding:.5in .6in;
+  page-break-inside:auto;
+  break-inside:auto;
 }
 .print-overflow-heading {
   margin:0 0 .22in;

@@ -72,6 +72,12 @@ In Edit mode, select a theme and click the palette button beside the theme menu.
 
 Drag the narrow divider beside the slide thumbnails to make the thumbnail rail wider or narrower. Double-click the divider (or focus it and press Home) to restore the default width. This editor preference is remembered in that browser; it does not change the presentation itself.
 
+## Instructor deck library and courses
+
+Open `ModernSlides/instructor.html` or click the open-book instructor button in the editor. After entering the instructor key, the dashboard shows every deck created by ModernSlides Publish. You can create courses, move published decks between courses, open a deck for presenting or editing, and create a new deck either globally or inside a course.
+
+Each course has a **Template for new decks** menu. A new deck created inside that course inherits the template deck's theme, customized theme colors, author, footer, logo, and slide-number setting, but starts with a clean first slide. Changing a deck's course only changes its organization in the instructor dashboard; its existing public URL stays the same.
+
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  
 # Slide format overview
@@ -196,6 +202,7 @@ A typical HostGator installation may look like:
             +-- ModernSlides/
                 |
                 +-- index.html
+                +-- instructor.html
                 +-- README.md
                 +-- style-gallery.html
                 +-- .htaccess (YOU WILL NEED TO UPLOAD THIS)
@@ -204,6 +211,7 @@ A typical HostGator installation may look like:
                     +-- .htaccess
                     +-- _bootstrap.php
                     +-- decks.php
+                    +-- library.php
                     +-- login.php
                     +-- publish.php
 
@@ -257,6 +265,7 @@ Inside your public folder, create a subfolder called ModernSlides, and a subfold
 
     ModernSlides/
         index.html
+        instructor.html
         style-gallery.html
         .htaccess
 
@@ -264,6 +273,7 @@ Inside your public folder, create a subfolder called ModernSlides, and a subfold
             .htaccess
             _bootstrap.php
             decks.php
+            library.php
             login.php
             publish.php
 

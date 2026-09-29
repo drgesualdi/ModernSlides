@@ -1981,6 +1981,7 @@ body.resizing-thumbs * { cursor: col-resize !important; user-select: none !impor
       <button id="new-deck" type="button" title="New deck" aria-label="New deck"><i class="fa-solid fa-file-circle-plus"></i></button>
       <button id="load-deck" type="button" title="Load JSON, Markdown, or old text deck" aria-label="Load deck"><i class="fa-solid fa-folder-open"></i></button>
       <button id="open-published" type="button" title="Open a published deck (instructor)" aria-label="Open published decks"><i class="fa-solid fa-folder-tree"></i></button>
+      <button id="instructor-library" type="button" title="Instructor deck library" aria-label="Instructor deck library"><i class="fa-solid fa-book-open-reader"></i></button>
       <button id="restore-deck" type="button" title="Restore previous deck" aria-label="Restore previous deck" disabled><i class="fa-solid fa-clock-rotate-left"></i></button>
       <button id="manage-assets" type="button" title="Manage pasted images" aria-label="Manage images"><i class="fa-solid fa-images"></i></button>
       <button id="view-json" type="button" title="View canonical JSON" aria-label="View JSON"><i class="fa-solid fa-code"></i></button>
@@ -2232,6 +2233,7 @@ const VERSION = 2;
 const PUBLISH_LOGIN_URL = './api/login.php';
 const PUBLISH_URL = './api/publish.php';
 const PUBLISHED_LIST_URL = './api/decks.php';
+const LIBRARY_URL = './api/library.php';
 const STAGE_W = 1600;
 const STAGE_H = 900;
 const STORAGE_CURRENT = 'modernslides.v2.current';
@@ -2581,6 +2583,7 @@ const state = {
   autosaveChain: Promise.resolve(),
   fileHandle: null,
   publishAuthenticated: false,
+  pendingCourseId: null,
   thumbResizeObserver: null
 };
 
@@ -5266,6 +5269,31 @@ async function loadFromQuery(deckValue) {
   }
   throw lastError || new Error('Could not load the requested deck.');
 }
+async function newDeckFromTemplate(templateName = '') {
+  const deck = freshDeck('New Presentation');
+  const name = normalizePublishName(templateName);
+  if (!name) return deck;
+  const url = new URL(`${name}/${name}.json`, location.href);
+  const response = await fetch(url.href, {cache:'no-store'});
+  if (!response.ok) throw new Error(`Could not load the course template (${response.status}).`);
+  const template = deckFromText(await response.text(), `${name}.json`);
+  const visualFields = ['theme','themeColors','author','footer','pageNumbers','logo'];
+  visualFields.forEach(field => { deck.meta[field] = deepClone(template.meta[field]); });
+  const logoAsset = String(deck.meta.logo || '').match(/^asset:([A-Za-z0-9_-]+)$/)?.[1];
+  if (logoAsset && template.assets?.[logoAsset]) deck.assets[logoAsset] = deepClone(template.assets[logoAsset]);
+  return normalizeDeck(deck);
+}
+async function assignPublishedDeckToCourse(deckName, courseId) {
+  if (!courseId) return;
+  const response = await fetch(LIBRARY_URL, {
+    method:'POST', credentials:'same-origin', cache:'no-store',
+    headers:{'Content-Type':'application/json','X-ModernSlides-Instructor':'1'},
+    body:JSON.stringify({action:'assign_deck',deckName,courseId})
+  });
+  let result = null;
+  try { result = await response.json(); } catch {}
+  if (!response.ok) throw new Error(result?.error || `Course assignment returned HTTP ${response.status}.`);
+}
 function fallbackDownloadText(text, filename, type = 'text/plain') {
   const blob = new Blob([text], {type});
   const link = document.createElement('a');
@@ -5654,10 +5682,21 @@ async function publishDeck() {
       );
     }
 
+    let courseNotice = '';
+    if (state.pendingCourseId) {
+      try {
+        await assignPublishedDeckToCourse(name, state.pendingCourseId);
+        courseNotice = ' and added to its course';
+      } catch (courseError) {
+        console.warn('Deck published but course assignment failed:', courseError);
+        courseNotice = '; open the Instructor Library to assign its course';
+      }
+    }
+
     closeModal('publish-modal');
 
     setStatus(
-      `Published ${name}/${name}.json`,
+      `Published ${name}/${name}.json${courseNotice}`,
       'saved'
     );
 
@@ -6575,6 +6614,7 @@ function setupEvents() {
   $('new-deck').addEventListener('click', createNewDeck);
   $('load-deck').addEventListener('click', openDeck);
   $('open-published').addEventListener('click', openPublishedDecks);
+  $('instructor-library').addEventListener('click', () => { location.href = 'instructor.html'; });
   $('refresh-published').addEventListener('click', openPublishedDecks);
   $('restore-deck').addEventListener('click', restorePreviousDeck);
   $('manage-assets').addEventListener('click', showAssetManager);
@@ -6861,8 +6901,16 @@ async function initialize() {
   if (!markdownSelfTest.ok) console.error('ModernSlides Markdown round-trip self-test failed', markdownSelfTest);
   const params = new URLSearchParams(location.search);
   const query = params.get('deck') || params.get('xml');
+  const createNew = params.get('new') === '1';
+  const openEditor = params.get('edit') === '1' || createNew;
+  const courseId = String(params.get('course') || '');
+  state.pendingCourseId = /^[a-z0-9][a-z0-9-]{0,63}$/.test(courseId) ? courseId : null;
   try {
-    if (query) {
+    if (createNew) {
+      setStatus('Creating a new deck…', 'working');
+      const deck = await newDeckFromTemplate(params.get('template') || '');
+      await applyDeck(deck, {filename:'new-presentation.json', preservePrevious:true, fileHandle:null});
+    } else if (query) {
       setStatus('Loading linked deck…', 'working');
       await loadFromQuery(query);
     } else {
@@ -6884,6 +6932,7 @@ async function initialize() {
     alert(`Could not load the requested deck. Opening the Schumpeter demo instead.\n\n${error.message}`);
     await applyDeck(buildSchumpeterDemoDeck(), {filename:'SchumpeterDemo.json', preservePrevious:false, fileHandle:null});
   }
+  if (openEditor) state.editMode = true;
   await refreshRestoreAvailability();
   document.body.classList.toggle('edit-mode', state.editMode);
   refreshAllViews({scrollThumb:false, preserveLive:false});

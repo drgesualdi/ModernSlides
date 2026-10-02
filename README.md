@@ -78,7 +78,7 @@ Drag the narrow divider beside the slide thumbnails to make the thumbnail rail w
 
 Open `ModernSlides/instructor.html` or click the open-book instructor button in the editor. After entering the instructor key, the dashboard shows every deck created by ModernSlides Publish. You can create courses, move published decks between courses, open a deck for presenting or editing, and create a new deck either globally or inside a course.
 
-Each course has a **Template for new decks** menu. A new deck created inside that course inherits the template deck's theme, customized theme colors, author, footer, logo, and slide-number setting, but starts with a clean first slide. Changing a deck's course only changes its organization in the instructor dashboard; its existing public URL stays the same.
+Each course has a **Template for new decks** menu. A new deck created inside that course begins as a complete, independent copy of the selected template deck: every slide, speaker note, embedded asset, layout, theme setting, customized color, author, footer, logo, and slide-number setting is included. The new deck opens with the title **New Presentation** and a blank date so it can be renamed without changing the original template. Changing a deck's course only changes its organization in the instructor dashboard; its existing public URL stays the same.
 
 Each slide is defined by simple text in the format below. A directive starts a line, optionally takes arguments in parentheses, ends with a colon `:`, and its value is all text that follows. A line with no directive is just ordinary text in the most recent structure. Use a backslash `\` if you want a command to appear as normal text.
  

@@ -5393,18 +5393,20 @@ async function loadFromQuery(deckValue) {
   throw lastError || new Error('Could not load the requested deck.');
 }
 async function newDeckFromTemplate(templateName = '') {
-  const deck = freshDeck('New Presentation');
+  const fresh = freshDeck('New Presentation');
   const name = normalizePublishName(templateName);
-  if (!name) return deck;
+  if (!name) return fresh;
   const url = new URL(`${name}/${name}.json`, location.href);
   const response = await fetch(url.href, {cache:'no-store'});
   if (!response.ok) throw new Error(`Could not load the course template (${response.status}).`);
   const template = deckFromText(await response.text(), `${name}.json`);
-  const visualFields = ['theme','themeColors','author','footer','pageNumbers','logo'];
-  visualFields.forEach(field => { deck.meta[field] = deepClone(template.meta[field]); });
-  const logoAsset = String(deck.meta.logo || '').match(/^asset:([A-Za-z0-9_-]+)$/)?.[1];
-  if (logoAsset && template.assets?.[logoAsset]) deck.assets[logoAsset] = deepClone(template.assets[logoAsset]);
-  return normalizeDeck(deck);
+  const deck = normalizeDeck(deepClone(template));
+  /* A course template is a complete starting deck, not only a visual preset.
+     Keep all slides, notes, assets, layouts, and appearance while giving the
+     new file its own identity. */
+  deck.meta.title = fresh.meta.title;
+  deck.meta.date = fresh.meta.date;
+  return deck;
 }
 async function assignPublishedDeckToCourse(deckName, courseId) {
   if (!courseId) return;
